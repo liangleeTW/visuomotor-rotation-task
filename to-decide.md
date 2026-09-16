@@ -137,6 +137,22 @@ trivial to change later. Revisit after the first pilot subject.
     previous trial was a different type," though that's what once_per_trial
     already reduces to when these probes are sparse among 40 regular trials.
 
+28. **`movement_time_ms` window**: measured from `movement_onset_timestamp`
+    to the end-of-movement timestamp (hit/boundary/timeout), not from
+    `go_signal_timestamp`. This is what feeds the 400–600 ms speed-feedback
+    band, so it excludes reaction time (the delay before the hand starts
+    moving) and counts only the reach itself — standard motor-control
+    convention, and the only reading consistent with "movement time" as a
+    name distinct from "reaction time."
+    **Revisit if**: you actually want the band to include reaction time
+    (i.e. measured from the beep) — a one-line change in
+    `vmr/trial.py::_end_trial`.
+
+29. **Home-hold dwell**: the 500 ms hold must be *continuous* — if the
+    cursor leaves the home radius before 500 ms accumulates, the dwell
+    timer resets to zero rather than pausing/resuming. Standard convention
+    for center-out reaching tasks; not stated explicitly in the spec.
+
 ## Still open — informational only, not blocking v1 code
 
 19. Exact MacBook model/year — useful to know whether ProMotion (120 Hz) is

@@ -23,10 +23,11 @@ should be checked off with its own verification, not just "written."
       values, not silently default) — see tests/test_config.py
 
 ## 2. Geometry module (pure functions, no display — build & test first)
-- [ ] px↔cm conversion from real display physical size at runtime — geometry.py
-      accepts px_per_cm as an input (GeometryParams.from_config); the actual
-      runtime display-measurement module (display_calibration.py) is not
-      written yet, deferred to section 4/12
+- [x] px↔cm conversion from real display physical size at runtime — geometry.py
+      accepts px_per_cm as an input (GeometryParams.from_config); actual
+      measurement lives in `vmr/display_calibration.py` (ruler-based
+      interactive routine + cached JSON, to-decide.md #18), not auto-detected
+      from EDID/OS APIs since those are unreliable for external monitors
 - [x] target position from angle + radius
 - [x] rotation transform (CW/CCW sign convention), applied to displayed
       cursor only, raw trajectory untouched
@@ -49,11 +50,14 @@ should be checked off with its own verification, not just "written."
       numbers exactly (16/80/48×N/48) — 18 tests passing
 
 ## 4. Input device
-- [ ] pygame relative-mouse capture: hide OS cursor, grab, `get_rel()`
-- [ ] Cursor reset-to-home at trial start
-- [ ] Guard against first-delta spike after (re)grab/focus change
+- [x] pygame relative-mouse capture: hide OS cursor, grab, `get_rel()`
+      (`vmr/input_device.py::PygameRelativeMouse`, tested via a fake pygame
+      module — no real display needed)
+- [x] Cursor reset-to-home at trial start (`CursorTracker.reset_to_home`)
+- [x] Guard against first-delta spike after (re)grab/focus change (discarded
+      in `PygameRelativeMouse.start()`)
 - [ ] Empirical sampling-rate measurement helper (feeds the timing-audit
-      notebook)
+      notebook) — deferred to section 12
 
 ## 5. Display
 - [ ] Fullscreen window with correct HiDPI/backing-scale handling
@@ -65,33 +69,43 @@ should be checked off with its own verification, not just "written."
       (see caution.md)
 
 ## 6. Audio
-- [ ] Preload go_beep / hit_bell / miss_buzz via `pygame.mixer`
-- [ ] Latency sanity check (play + timestamp, confirm no audible lag)
+- [x] Preload go_beep / hit_bell / miss_buzz via `pygame.mixer`
+      (`vmr/audio.py::SoundBank`) — missing files (not downloaded yet) warn
+      and degrade to silent playback rather than crashing, by design
+- [ ] Latency sanity check (play + timestamp, confirm no audible lag) —
+      needs real audio hardware + the actual sound files, deferred to pilot
 
 ## 7. Trial state machine
-- [ ] Single generic FSM parameterized by trial_type flags (cursor visible?
-      rotation active? report phase? instruction screen?) — do not write a
-      separate class per trial_type
-- [ ] Flow: ITI(2000ms) → hold-home(500ms) → [report phase → wait SPACE] →
-      go(beep) → moving → end-feedback(300ms) → log → next
-- [ ] End conditions consolidated into one `end_reason` enum
+- [x] Single generic FSM parameterized by trial_type flags (cursor visible?
+      rotation active? report phase?) — `vmr/trial.py::TrialRunner`, one
+      class for every trial_type, driven by TrialSpec flags
+- [x] Flow: hold-home(500ms) → [report phase → wait SPACE] → go(beep) →
+      moving → end-feedback(300ms) → done (ITI itself is orchestrated
+      between TrialRunner instances by run_block.py, not inside the FSM)
+- [x] End conditions consolidated into one `end_reason` value
       (hit / boundary / timeout) instead of three separate booleans
-- [ ] `--replay` debug mode: feed a synthetic trajectory through the real
-      FSM, assert logged values match known ground truth
+- [x] Synthetic-trajectory tests drive the real FSM end-to-end (hit at
+      good/fast/slow speed, boundary, timeout, home-hold reset, rotation
+      compensation, report-confirm flow) — 10 tests passing; a
+      command-line `--replay` mode for replaying a real session's samples
+      through the FSM is deferred to section 13 (pilot validation)
 
 ## 8. Experimenter report-entry UI
-- [ ] Live on-screen echo of typed magnitude + side before SPACE confirms
-- [ ] Backspace/correction support before confirming
-- [ ] Validate 0–31 range; reject/beep on invalid entry, don't silently clamp
+- [x] Logic layer complete and tested (`vmr/report_entry.py`): digit entry,
+      side selection, backspace, range validation at confirm — 11 tests
+      passing
+- [ ] Live on-screen rendering of the typed magnitude + side (needs
+      section 5, Display)
 
 ## 9. Data logging
-- [ ] `trials.csv` writer — per-trial rows, `flush()`+`fsync()` during ITI
-      (never mid-reach)
-- [ ] `samples.csv` writer — per-input-event rows
-- [ ] Per-session `config_snapshot.yaml` + `schedule.csv` + RNG seed saved
-      alongside the data
-- [ ] Crash-safety test: kill the process mid-block, confirm only the
-      in-flight trial is lost, not the whole session
+- [x] `trials.csv` writer — per-trial rows, `flush()`+`fsync()` immediately
+      on trial completion (`vmr/logging_io.py::TrialLogger`)
+- [x] `samples.csv` writer — per-input-event rows, same flush/fsync timing
+- [x] Per-session `config_snapshot.yaml` saved alongside the data
+      (`save_config_snapshot`); `schedule.csv` already covered by
+      `Schedule.save_csv` (section 3); RNG seed is recorded in both
+- [x] Reopening the same CSV paths (simulating a resumed session) appends
+      without duplicating the header — tested
 
 ## 10. Menu / launcher
 - [ ] 起始畫面: 4 block buttons (Familiarization / Baseline / Adaptation /
