@@ -6,3 +6,4 @@ data/
 *.egg-info/
 .DS_Store
 .marimo.lock.json
+display_calibration.json

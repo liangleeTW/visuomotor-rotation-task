@@ -63,7 +63,10 @@ _TRIAL_TYPE_SPEC = {
         "once_per_trial",
     ),
     "post_exclusion": ("post_adaptation", None, False, False, "post_exclusion", "once_per_block"),
-    "post_readaptation": ("post_adaptation", _FIXED_ROTATION, True, False, "post_readaptation", "once_per_block"),
+    # post_readaptation has no distinct spoken instruction in the spec
+    # (unlike exclusion/inclusion, which each have quoted Chinese text) —
+    # see to-decide.md #27.
+    "post_readaptation": ("post_adaptation", _FIXED_ROTATION, True, False, None, None),
     "post_inclusion": ("post_adaptation", None, False, False, "post_inclusion", "once_per_block"),
 }
 

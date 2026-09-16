@@ -129,9 +129,9 @@ trivial to change later. Revisit after the first pilot subject.
       among ordinary adaptation trials (pure-random interleaving), and the
       spec explicitly says "Presented before each Return-to-baseline probe
       block" — read literally, that's every occurrence, not once per cycle.
-    - `once_per_block` — the three post-adaptation sub-blocks (exclusion /
-      re-adaptation / inclusion), each a contiguous 16-trial run per
-      to-decide.md #7; shown once at the start of each run.
+    - `once_per_block` — the post-adaptation exclusion and inclusion
+      sub-blocks (each a contiguous 16-trial run per to-decide.md #7),
+      shown once at the start of each. Re-adaptation gets none — see #27.
     **Revisit if**: the once-per-trial reminders for report/return-to-baseline
     probes feel repetitive in piloting — could be softened to "only if the
     previous trial was a different type," though that's what once_per_trial
@@ -153,6 +153,16 @@ trivial to change later. Revisit after the first pilot subject.
     timer resets to zero rather than pausing/resuming. Standard convention
     for center-out reaching tasks; not stated explicitly in the spec.
 
+30. **Instruction-text font**: pygame's bundled default font has no CJK
+    glyphs — it silently renders Chinese text as tiny "tofu" boxes rather
+    than erroring, which would have gone unnoticed without pixel-level
+    testing. `vmr/display.py` now picks a real CJK-capable system font
+    (`stheitimedium`, confirmed present and rendering correctly on this
+    Mac) with a fallback list, rather than trusting `SysFont(None, ...)`.
+    **Revisit if**: the target Mac doesn't have any of the candidate fonts
+    installed — check `pygame.font.get_fonts()` on that machine and add
+    whichever CJK font it does have to `_CJK_FONT_CANDIDATES`.
+
 ## Still open — informational only, not blocking v1 code
 
 19. Exact MacBook model/year — useful to know whether ProMotion (120 Hz) is
@@ -161,10 +171,17 @@ trivial to change later. Revisit after the first pilot subject.
 20. Whether to add trial-order constraints later (no >2 consecutive repeats
     of a target, no-vision trials excluded from first/last N of baseline,
     etc.) — deferred per "pure random for now" (#5).
-27. **Spec gap**: no instruction screen is defined for entering the
-    adaptation phase itself (only `adaptation_report` and
-    `adaptation_return_to_baseline` have explicit instruction text; plain
-    `adaptation_regular` trials — and the transition into the rotated phase
-    generally — have none in the spec). Not inventing wording for this;
-    flagging so you can decide whether participants need a verbal heads-up
-    ("the cursor will now move differently") before the first rotated trial.
+27. **Spec gap**: two transitions have no quoted instruction text, unlike
+    every other section boundary:
+    - entering the adaptation phase itself (only `adaptation_report` and
+      `adaptation_return_to_baseline` have explicit instruction text;
+      plain `adaptation_regular` trials — and the transition into the
+      rotated phase generally — have none)
+    - entering the post-adaptation **re-adaptation** sub-block (exclusion
+      and inclusion each have quoted Chinese instructions; re-adaptation's
+      spec pages show the same plain rotated-trial mechanics as
+      `adaptation_regular`, with no text box)
+    Not inventing wording for either; `vmr/schedule.py` currently shows no
+    instruction screen for `post_readaptation` and none for entering
+    adaptation. Flagging so you can decide whether participants need a
+    verbal heads-up before either transition.

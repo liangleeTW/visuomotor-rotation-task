@@ -141,6 +141,12 @@ class TrialRunner:
 
     # -- public -----------------------------------------------------------
 
+    @property
+    def displayed_pos(self) -> Point | None:
+        """The most recently computed displayed-cursor position (None if
+        the current trial type never shows a cursor). For rendering."""
+        return self._displayed_pos
+
     def step(self, frame: FrameInput) -> None:
         if self.phase is TrialPhase.DONE:
             return

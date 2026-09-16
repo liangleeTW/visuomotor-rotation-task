@@ -166,9 +166,10 @@ def test_adaptation_report_and_rtb_instructions_shown_every_time(schedule):
 def test_post_adaptation_instruction_shown_once_per_contiguous_block(schedule):
     post = schedule.by_phase("post_adaptation")
     shown = [t for t in post if t.show_instruction]
-    # exactly 3 sub-blocks (exclusion, readaptation, inclusion), each shown once
-    assert len(shown) == 3
-    assert [t.trial_type for t in shown] == ["post_exclusion", "post_readaptation", "post_inclusion"]
+    # exclusion and inclusion each have spec-quoted instruction text and are
+    # shown once; re-adaptation has no distinct instruction (to-decide.md #27)
+    assert len(shown) == 2
+    assert [t.trial_type for t in shown] == ["post_exclusion", "post_inclusion"]
     # and each is the first trial of its contiguous run
     for i, t in enumerate(post):
         if t.show_instruction:

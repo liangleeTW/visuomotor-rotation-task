@@ -19,6 +19,7 @@ packages = [{include = "vmr"}]
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
 marimo = "^0.9"
+matplotlib = "^3.11.2"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

@@ -109,6 +109,19 @@ class ReportEntryConfig:
 
 
 @dataclass(frozen=True)
+class ColorsConfig:
+    background: tuple[int, int, int]
+    home: tuple[int, int, int]
+    cursor: tuple[int, int, int]
+    target_default: tuple[int, int, int]
+    hit_good: tuple[int, int, int]
+    hit_too_fast: tuple[int, int, int]
+    hit_too_slow: tuple[int, int, int]
+    landmark: tuple[int, int, int]
+    instruction_text: tuple[int, int, int]
+
+
+@dataclass(frozen=True)
 class Config:
     workspace: WorkspaceConfig
     targets: TargetsConfig
@@ -119,6 +132,7 @@ class Config:
     trial_counts: TrialCountsConfig
     audio: AudioConfig
     report_entry: ReportEntryConfig
+    colors: ColorsConfig
     raw: dict = field(repr=False)  # full parsed YAML, for anything not modeled above
 
 
@@ -175,6 +189,7 @@ def load_config(path: str | Path | None = None) -> Config:
             magnitude_range=tuple(raw["report_entry"]["magnitude_range"]),
             side_keys=dict(raw["report_entry"]["side_keys"]),
         )
+        colors = ColorsConfig(**{k: tuple(v) for k, v in raw["colors"].items()})
     except KeyError as e:
         raise KeyError(f"config.yaml missing required key: {e}") from e
 
@@ -202,5 +217,6 @@ def load_config(path: str | Path | None = None) -> Config:
         trial_counts=trial_counts,
         audio=audio,
         report_entry=report_entry,
+        colors=colors,
         raw=raw,
     )

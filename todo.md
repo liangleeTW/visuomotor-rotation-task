@@ -60,13 +60,19 @@ should be checked off with its own verification, not just "written."
       notebook) — deferred to section 12
 
 ## 5. Display
-- [ ] Fullscreen window with correct HiDPI/backing-scale handling
-- [ ] Draw: home, cursor, target, landmark ring + numbers, instruction text
-      screens (bilingual, per spec)
-- [ ] Color feedback states (green/yellow/blue hit bands, red target,
-      miss = disappear)
+- [x] Fullscreen window (`vmr/orchestration.py::run_block`, `pygame.FULLSCREEN`;
+      `--windowed` for dev). HiDPI/backing-scale correctness itself can only be
+      confirmed on a real Retina display — deferred to pilot (section 13)
+- [x] Draw: home, cursor, target, landmark ring + numbers, instruction text
+      screens (`vmr/display.py::Renderer`) — real spec-quoted Chinese text
+      for the 6 instruction_keys that have it (to-decide.md #26/#27);
+      verified headlessly with pixel-sampling smoke tests, 11 tests passing.
+      Found and fixed: pygame's default font has no CJK glyphs (renders
+      tofu) — now picks a real CJK system font (`stheitimedium` et al.)
+- [x] Color feedback states (green/yellow/blue hit bands, red target,
+      miss = disappear) — driven by `cfg.colors`, tested
 - [ ] Verify True Tone / Night Shift are off before trusting feedback colors
-      (see caution.md)
+      on the real machine (see caution.md) — user's hardware, not code
 
 ## 6. Audio
 - [x] Preload go_beep / hit_bell / miss_buzz via `pygame.mixer`
@@ -94,8 +100,9 @@ should be checked off with its own verification, not just "written."
 - [x] Logic layer complete and tested (`vmr/report_entry.py`): digit entry,
       side selection, backspace, range validation at confirm — 11 tests
       passing
-- [ ] Live on-screen rendering of the typed magnitude + side (needs
-      section 5, Display)
+- [x] Live on-screen rendering of the typed magnitude + side
+      (`Renderer.draw_report_entry_overlay`, covered by the REPORT_WAIT
+      case in test_display.py)
 
 ## 9. Data logging
 - [x] `trials.csv` writer — per-trial rows, `flush()`+`fsync()` immediately
@@ -108,22 +115,41 @@ should be checked off with its own verification, not just "written."
       without duplicating the header — tested
 
 ## 10. Menu / launcher
-- [ ] 起始畫面: 4 block buttons (Familiarization / Baseline / Adaptation /
-      Post-adaptation)
-- [ ] Subject-ID / filename entry + on-screen confirmation before each block
-      starts (per spec's "先命名儲存檔案")
-- [ ] Refuse to silently overwrite an existing subject's file
+- [x] 起始畫面: 4 block buttons (Familiarization / Baseline / Adaptation /
+      Post-adaptation) — `vmr/menu.py` (pure selection logic, tested) +
+      `vmr/orchestration.py::run_interactive_menu` (glue, tested via a
+      scripted `pygame.event.get` mock)
+- [x] Subject-ID entry + on-screen confirmation (`TextEntryState` +
+      `run_interactive_menu`'s second phase)
+- [x] Refuse to silently overwrite: `existing_trial_count()` +
+      `run_block()`'s resume logic skip already-logged trials rather than
+      re-running/overwriting them (see section 11)
 
 ## 11. Session orchestration
-- [ ] `run_block.py` entry point with CLI args (subject id, block name,
-      `--debug`/`--replay` flags)
-- [ ] Confirm re-launching a block mid-session doesn't corrupt prior data
+- [x] `run_block.py` entry point with CLI args (`--subject`, `--block`,
+      `--seed`, `--data-dir`, `--windowed`); omitting `--subject`/`--block`
+      launches the interactive menu instead. `--debug`/`--replay` not
+      added — no concrete need identified yet; add if pilot needs it
+- [x] Confirm re-launching a block mid-session doesn't corrupt prior data —
+      `test_run_block_resumes_without_rerunning_completed_trials` runs a
+      partial block, "resumes" with a fresh run_block() call, and asserts
+      exactly the missing trials were appended (no duplicates, no loss)
+- [x] Found and fixed along the way: the project package itself was never
+      actually installed into the venv (`poetry add` alone doesn't do
+      this) — `vmr` only imported when cwd happened to be the project
+      root. Fixed with `poetry install`; without it, `notebooks/` scripts
+      would fail to import `vmr` at all.
 
 ## 12. QC / analysis notebooks (Marimo)
-- [ ] `check_session.py`: load a subject's CSVs, plot trajectories per
-      trial_type, flag missed/late reports, summary hit-rate
-- [ ] `calibration.py`: px/cm verification, pointer-acceleration-off
-      verification, achieved sampling-rate histogram
+- [x] `check_session.py`: load a subject's CSVs, plot trajectories per
+      trial_type (colored by end_reason), flag missing reports, summary
+      hit-rate/movement-time table by trial_type. Smoke-tested against a
+      synthetic session (both the "no data yet" and "real data" paths)
+- [x] `calibration.py`: shows cached px/cm calibration status; a live,
+      button-triggered pointer-acceleration capture (records raw deltas
+      for 5s, reports achieved Hz + net displacement — only meaningful
+      run interactively via `marimo edit`, not in headless/script mode);
+      achieved sampling-rate histogram from a real session's samples.csv
 
 ## 13. Pilot validation
 - [ ] Full self-run of every block/phase end-to-end
@@ -133,6 +159,7 @@ should be checked off with its own verification, not just "written."
       angle-at-50%-reach measure
 
 ## 14. Docs
-- [ ] `README.md`: setup instructions, how to run a session, file/data layout
+- [x] `README.md`: setup instructions, how to run a session, file/data
+      layout, project layout, known gaps
 - [ ] Keep `caution.md` and `to-decide.md` updated as decisions firm up
       after piloting

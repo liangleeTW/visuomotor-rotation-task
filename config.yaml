@@ -85,3 +85,17 @@ report_entry:
   # to-decide.md #14: experimenter types magnitude, presses a side key, SPACE confirms
   magnitude_range: [0, 31]
   side_keys: {left: CCW, right: CW}
+
+colors:
+  # RGB triples, 0-255. Engineering defaults matching the spec's named
+  # colors (green/red/yellow/blue/white/black) — revisit after piloting
+  # once True Tone / Night Shift are confirmed off (caution.md).
+  background: [0, 0, 0]
+  home: [0, 200, 0]
+  cursor: [255, 255, 255]
+  target_default: [220, 20, 20]
+  hit_good: [0, 200, 0]
+  hit_too_fast: [230, 200, 0]
+  hit_too_slow: [40, 100, 230]
+  landmark: [200, 200, 200]
+  instruction_text: [255, 255, 255]
