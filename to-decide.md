@@ -117,6 +117,26 @@ trivial to change later. Revisit after the first pilot subject.
     gives a literature-standard fallback if the 50%-reach measure turns out
     noisier than expected.
 
+26. **Instruction-screen timing** (implemented in `vmr/schedule.py`): three
+    scopes, inferred from the spec's own wording rather than applied
+    uniformly:
+    - `once_per_phase` — familiarization and baseline (all three baseline
+      trial types share one combined instruction, per the spec's single
+      "Baseline-section start" text covering veridical/no-vision/report
+      scenarios together); shown only before the very first trial.
+    - `once_per_trial` — `adaptation_report` and
+      `adaptation_return_to_baseline`. These are scattered individually
+      among ordinary adaptation trials (pure-random interleaving), and the
+      spec explicitly says "Presented before each Return-to-baseline probe
+      block" — read literally, that's every occurrence, not once per cycle.
+    - `once_per_block` — the three post-adaptation sub-blocks (exclusion /
+      re-adaptation / inclusion), each a contiguous 16-trial run per
+      to-decide.md #7; shown once at the start of each run.
+    **Revisit if**: the once-per-trial reminders for report/return-to-baseline
+    probes feel repetitive in piloting — could be softened to "only if the
+    previous trial was a different type," though that's what once_per_trial
+    already reduces to when these probes are sparse among 40 regular trials.
+
 ## Still open — informational only, not blocking v1 code
 
 19. Exact MacBook model/year — useful to know whether ProMotion (120 Hz) is
@@ -125,3 +145,10 @@ trivial to change later. Revisit after the first pilot subject.
 20. Whether to add trial-order constraints later (no >2 consecutive repeats
     of a target, no-vision trials excluded from first/last N of baseline,
     etc.) — deferred per "pure random for now" (#5).
+27. **Spec gap**: no instruction screen is defined for entering the
+    adaptation phase itself (only `adaptation_report` and
+    `adaptation_return_to_baseline` have explicit instruction text; plain
+    `adaptation_regular` trials — and the transition into the rotated phase
+    generally — have none in the spec). Not inventing wording for this;
+    flagging so you can decide whether participants need a verbal heads-up
+    ("the cursor will now move differently") before the first rotated trial.

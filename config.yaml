@@ -1,0 +1,87 @@
+# Visuomotor rotation task — experiment parameters.
+#
+# All spatial constants are in physical units (mm / cm), not pixels.
+# px-per-cm is measured at runtime from the actual display (see
+# vmr/display_calibration.py) and combined with these values by
+# vmr/geometry.py. This file should not need to change when the
+# experiment is run on a different monitor.
+#
+# Decisions recorded here trace back to to-decide.md — see that file
+# for rationale and revision history.
+
+workspace:
+  home_to_target_cm: 7.0
+  workspace_boundary_cm: 7.0  # raw movement past this from home = boundary_crossed
+  cursor_radius_mm: 0.5
+  home_radius_mm: 2.5
+  target_radius_mm: 5.0
+  # hit_radius = target_radius + cursor_radius (circle-overlap contact test)
+  # to-decide.md #12 — provisional, revisit after pilot
+  hit_radius_mm: 5.5
+
+targets:
+  angles_deg: [0, 90, 180, 270]
+  # angle convention: 0=right, 90=up, 180=left, 270=down; increasing degrees
+  # sweeps counterclockwise as the participant views the screen.
+
+landmarks:
+  # Taylor, Krakauer & Ivry (2014), J Neurosci 34(8):3023-3032.
+  # to-decide.md #13
+  n_positions: 64
+  spacing_deg: 5.625  # 360 / 64
+  max_magnitude: 31
+  # sign convention: positive = clockwise from target, negative = counterclockwise
+  # (matches the paper; also matches signed_angular_error in geometry.py)
+
+rotation:
+  adaptation_deg: 60.0
+  adaptation_direction: clockwise
+  # positive rotation_deg always means "clockwise" throughout this codebase
+  report_training_range_deg: [-30.0, 30.0]  # pure-random uniform, resampled every trial
+
+timing_ms:
+  inter_trial_interval: 2000
+  home_hold: 500
+  target_timeout: 2000  # clock starts at the go signal (beep), for every trial type
+  end_feedback_duration: 300
+  report_timeout: null  # no timeout on the verbal report phase
+
+feedback_speed_band_ms:
+  good_min: 400
+  good_max: 600
+
+movement_onset:
+  # movement onset = cursor leaves the home radius (to-decide.md #1)
+  method: leaves_home_radius
+
+trial_counts:
+  familiarization: 16
+  baseline:
+    veridical: 34
+    no_vision: 6
+    report_training: 40
+  adaptation:
+    regular_per_cycle: 40
+    aim_report_per_cycle: 4
+    return_to_baseline_per_cycle: 4
+    n_cycles: 1  # to-decide.md #3 — change here to run more cycles
+  post_adaptation:
+    exclusion: 16
+    readaptation: 16
+    inclusion: 16
+    # fixed order for all subjects (to-decide.md #7):
+    order: [exclusion, readaptation, inclusion]
+
+randomization:
+  # v1: pure random, no additional constraints (to-decide.md #5, #6)
+  seed: null  # set per-session at runtime and logged, not fixed here
+
+audio:
+  go_beep: go_beep.wav
+  hit_bell: hit_bell.wav
+  miss_buzz: miss_buzz.wav
+
+report_entry:
+  # to-decide.md #14: experimenter types magnitude, presses a side key, SPACE confirms
+  magnitude_range: [0, 31]
+  side_keys: {left: CCW, right: CW}
