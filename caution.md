@@ -60,6 +60,13 @@ that will not show up as an obvious bug, only as noisier/biased angle data.
   not startling using the familiarization block.
 - Keyboard positioned so only the **experimenter** can reach it (SPACE
   confirm + report-entry keys are experimenter-only, never participant-facing)
+- **If using an external/extended monitor**: set it as the **Main Display**
+  in System Settings → Displays → Arrangement (drag the menu-bar strip onto
+  it) *before* launching. The app opens fullscreen on whichever display is
+  Main — it does not default to the built-in MacBook screen, and does not
+  default to "whichever monitor is bigger" either (to-decide.md #31). With
+  only one display connected, there's nothing to set — it's automatically
+  Main and the app uses it.
 
 ## Task-specific gotchas
 - **Landmark sign convention**: negative = counterclockwise from target,
@@ -76,6 +83,19 @@ that will not show up as an obvious bug, only as noisier/biased angle data.
 - Confirm the subject ID / output filename immediately after entering it at
   the start menu — check the actual file on disk exists with the expected
   name before the participant starts moving.
+- **Reusing a subject ID for a different real person** (e.g. weeks later,
+  by accident) is now caught: both the menu and the `--subject` CLI flag
+  warn and require an explicit Resume/different-ID choice if that
+  subject/block already has trials logged (to-decide.md #32). Read that
+  prompt when it appears — it exists specifically for the case where "S01"
+  looks right but isn't the same person as last time. Leading/trailing
+  whitespace in a typed ID is stripped automatically; case is not
+  (`S01` and `s01` are different subjects, to-decide.md #33).
+- **This does not make same-subject resume fully safe on its own**: if a
+  block was genuinely interrupted and you're resuming it, pass the same
+  `--seed` you used originally (recorded in that subject/block's
+  `schedule.csv`) — otherwise the remaining trials come from a freshly
+  randomized schedule, not the one actually planned (to-decide.md #34).
 - Local storage only, no server: **back up the data folder after every
   session** (external drive, cloud sync, whatever is convenient) — a single
   disk failure with no backup loses everything.
@@ -103,6 +123,8 @@ the first pilot subject.
 - [ ] Do Not Disturb on, other apps closed
 - [ ] Display brightness fixed, True Tone & Night Shift off
 - [ ] Power adapter connected
-- [ ] Subject ID / filename entered and confirmed on disk
+- [ ] External monitor (if used) set as Main Display before launching
+- [ ] Subject ID / filename entered and confirmed on disk; if a duplicate
+      warning appears, actually stop and check before choosing Resume
 - [ ] Familiarization block run and reviewed before the main session
 - [ ] Backup performed after the session ends

@@ -181,6 +181,73 @@ trivial to change later. Revisit after the first pilot subject.
     installed — check `pygame.font.get_fonts()` on that machine and add
     whichever CJK font it does have to `_CJK_FONT_CANDIDATES`.
 
+31. **Which physical display shows the experiment, on a multi-monitor
+    setup**: pygame's own default (`display=0`) is **not** reliably the
+    display macOS calls "Main" — confirmed by live testing: with an
+    external monitor explicitly set as Main Display in System Settings,
+    `display=0` still opened on the built-in MacBook panel. SDL's display
+    enumeration order follows OS connection/detection order, not the Main
+    Display setting; Apple's own docs for the underlying enumeration API
+    note the first entry "is not necessarily the main display." This also
+    meant calibration (`CGMainDisplayID`) and window placement could
+    silently disagree about which screen was meant.
+    `vmr/orchestration.py::resolve_display_index` now matches pygame
+    display indices against Quartz's `CGMainDisplayID` **by resolution**
+    (tolerant of a 2x HiDPI points-vs-pixels mismatch between the two
+    APIs), so display selection and calibration are structurally tied to
+    the same "Main Display" concept and can't disagree. With only one
+    display connected there's nothing to disambiguate, so it returns 0
+    immediately — the "no external monitor → falls back to the built-in
+    screen" behavior is automatic. Falls back to 0 with a `warnings.warn`
+    if detection fails or two displays share an identical resolution
+    (rare for laptop+external, but not impossible).
+    **To use it**: set the desired display as Main Display in System
+    Settings → Displays → Arrangement (drag the menu-bar strip onto it)
+    before launching. Verified against this dev machine's real displays
+    (not mocked): correctly resolved to the display matching
+    `CGMainDisplayID`'s actual resolution.
+    **Revisit if**: you get two displays with truly identical native
+    resolutions (e.g. two of the exact same external monitor model) — the
+    resolution-matching heuristic can't disambiguate that case and will
+    fall back to display 0 with a warning.
+
+32. **Duplicate subject-ID protection**: `(subject_id, block_name)` is the
+    *entire* identity key for where data is saved — there is no
+    participant-identity check, so accidentally reusing an ID (e.g. weeks
+    later, for a different real person) would previously either silently
+    do nothing (if the prior block was fully complete — `trials_to_run`
+    would be empty) or, worse, silently merge a second person's trials
+    into the same file as a partially-completed prior session, with
+    logging appending in both cases (never overwriting — that part was
+    already safe). Both the interactive menu (after the subject-ID text
+    is confirmed) and the CLI `--subject`/`--block` path now check
+    `vmr/menu.py::check_existing_data` and require an explicit choice
+    before proceeding if that subject/block already has trials logged:
+    the menu shows a Resume/different-ID/Cancel screen
+    (`draw_duplicate_warning`, `wait_for_duplicate_choice`); the CLI
+    prints the same information and asks via `input()`, with a `--yes`
+    flag to skip the prompt for scripted/known-good resumes.
+    **What this does not fix**: a genuinely intentional resume after a
+    real interruption still uses a fresh random schedule unless the
+    original `--seed` is passed explicitly — see #34; auto-recovering the
+    seed from the existing `schedule.csv` on resume would be the complete
+    fix and hasn't been implemented.
+    **Revisit if**: this prompt feels like it fires too often for a
+    workflow that deliberately reruns a block under the same ID.
+
+33. **Subject-ID whitespace/case normalization**: leading/trailing
+    whitespace is stripped before a subject ID is ever used to build a
+    path or checked against existing data (`vmr/menu.py::normalize_subject_id`,
+    applied on both the menu and CLI paths) — a stray space from a
+    copy-paste or an errant space-bar tap can't be a legitimate part of
+    an ID, and without stripping it would also let a whitespace-variant
+    ID slip past the duplicate-ID check in #32 entirely (this normalization
+    is load-bearing for #32, not merely cosmetic). A whitespace-only entry
+    is also no longer accepted as a valid subject ID at all
+    (`handle_text_entry_key` requires non-whitespace content to confirm).
+    **Case is deliberately NOT normalized** — `S01` and `s01` are treated
+    as different subjects, per PI decision (2026-09-18), not an oversight.
+
 ## Still open — informational only, not blocking v1 code
 
 19. Exact MacBook model/year — useful to know whether ProMotion (120 Hz) is
@@ -189,6 +256,18 @@ trivial to change later. Revisit after the first pilot subject.
 20. Whether to add trial-order constraints later (no >2 consecutive repeats
     of a target, no-vision trials excluded from first/last N of baseline,
     etc.) — deferred per "pure random for now" (#5).
+34. **Resume doesn't recover the original seed.** `build_schedule()` draws
+    a fresh random seed every launch unless `--seed` is passed explicitly;
+    resuming a partially-completed block (`n_existing > 0` trials already
+    logged) doesn't read back the seed that was actually used the first
+    time from `schedule.csv`/`trials.csv`'s `seed` column — it just slices
+    "the first N trials" off of whatever schedule the current call
+    happens to generate. If that's a different seed than the original run,
+    "trial N onward" isn't the trial sequence that was actually planned.
+    Raised alongside #32 but not fixed: the natural fix is to have resume
+    look up and reuse the recorded seed automatically (warning if the
+    caller passed a conflicting one), at the same point `check_existing_data`
+    already reads the prior session's files.
 27. **Spec gap**: two transitions have no quoted instruction text, unlike
     every other section boundary:
     - entering the adaptation phase itself (only `adaptation_report` and

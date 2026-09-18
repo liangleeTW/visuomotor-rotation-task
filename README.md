@@ -48,7 +48,18 @@ poetry run python run_block.py --subject S01 --block baseline --windowed  # dev/
 
 Blocks: `familiarization`, `baseline`, `adaptation`, `post_adaptation`.
 Re-running the same `--subject`/`--block` **resumes** automatically —
-already-logged trials are skipped, not repeated or overwritten.
+already-logged trials are skipped, not repeated or overwritten. If that
+subject/block already has data, you'll be asked to confirm before it
+proceeds (add `--yes` to skip the prompt for a known-good scripted
+resume) — see caution.md and to-decide.md #32/#33 for why, and #34 for a
+related resume caveat around `--seed`.
+
+**Multi-monitor**: the app opens fullscreen on whichever display is
+currently set as **Main Display** in System Settings → Displays →
+Arrangement — not necessarily the built-in screen, and not "whichever is
+bigger." To run on an external monitor, drag the menu bar to it first
+(to-decide.md #31). With only one display connected, there's nothing to
+configure.
 
 ## Data layout
 

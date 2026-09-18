@@ -96,6 +96,32 @@ def detect_physical_size_mm(quartz_module=None) -> tuple[float, float] | None:
     return (width_mm, height_mm)
 
 
+def detect_main_display_resolution_px(quartz_module=None) -> tuple[int, int] | None:
+    """Pixel resolution of the main display (whichever one currently
+    holds the menu bar), via Quartz. Returns None on any failure.
+
+    Used by vmr/orchestration.py::resolve_display_index to figure out
+    which pygame/SDL display index corresponds to the same physical
+    screen this function (and detect_physical_size_mm) are reading from
+    — SDL's own default display index is NOT reliably the Main Display
+    (see to-decide.md #31); this is the piece that lets display
+    selection and calibration agree on which screen is meant."""
+    if quartz_module is None:
+        try:
+            import Quartz as quartz_module  # noqa: PLC0415
+        except ImportError:
+            return None
+    try:
+        display_id = quartz_module.CGMainDisplayID()
+        width = quartz_module.CGDisplayPixelsWide(display_id)
+        height = quartz_module.CGDisplayPixelsHigh(display_id)
+    except Exception:
+        return None
+    if width <= 0 or height <= 0:
+        return None
+    return (width, height)
+
+
 def detect_calibration(screen_resolution_px: tuple[int, int], quartz_module=None) -> Calibration | None:
     """Auto-detected Calibration for the given pixel resolution, or None
     if detection isn't possible (see detect_physical_size_mm)."""

@@ -16,6 +16,7 @@ from vmr.display_calibration import (
     Calibration,
     compute_px_per_cm,
     detect_calibration,
+    detect_main_display_resolution_px,
     detect_physical_size_mm,
     load_calibration,
     resolve_calibration,
@@ -33,9 +34,11 @@ class _FakeQuartz:
     """Injectable stand-in for the real Quartz module (see
     detect_physical_size_mm's quartz_module parameter)."""
 
-    def __init__(self, width_mm=300.0, height_mm=200.0, raise_error=False):
+    def __init__(self, width_mm=300.0, height_mm=200.0, width_px=1920, height_px=1080, raise_error=False):
         self.width_mm = width_mm
         self.height_mm = height_mm
+        self.width_px = width_px
+        self.height_px = height_px
         self.raise_error = raise_error
 
     def CGMainDisplayID(self):
@@ -45,6 +48,12 @@ class _FakeQuartz:
 
     def CGDisplayScreenSize(self, display_id):
         return _FakeSize(self.width_mm, self.height_mm)
+
+    def CGDisplayPixelsWide(self, display_id):
+        return self.width_px
+
+    def CGDisplayPixelsHigh(self, display_id):
+        return self.height_px
 
 
 def test_compute_px_per_cm():
@@ -98,6 +107,20 @@ def test_detect_physical_size_mm_rejects_too_large():
 def test_detect_physical_size_mm_none_on_exception():
     result = detect_physical_size_mm(quartz_module=_FakeQuartz(raise_error=True))
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# detect_main_display_resolution_px (to-decide.md #31)
+# ---------------------------------------------------------------------------
+
+
+def test_detect_main_display_resolution_px():
+    result = detect_main_display_resolution_px(quartz_module=_FakeQuartz(width_px=1920, height_px=1080))
+    assert result == (1920, 1080)
+
+
+def test_detect_main_display_resolution_px_none_on_exception():
+    assert detect_main_display_resolution_px(quartz_module=_FakeQuartz(raise_error=True)) is None
 
 
 # ---------------------------------------------------------------------------

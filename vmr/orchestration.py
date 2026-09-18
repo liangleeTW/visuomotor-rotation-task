@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import time
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -33,19 +34,23 @@ import pygame
 from vmr.audio import SoundBank
 from vmr.config import Config, load_config
 from vmr.display import Renderer
-from vmr.display_calibration import resolve_calibration, save_calibration
+from vmr.display_calibration import detect_main_display_resolution_px, resolve_calibration, save_calibration
 from vmr.geometry import GeometryParams
 from vmr.input_device import CursorTracker, PygameRelativeMouse
 from vmr.logging_io import TrialLogger, save_config_snapshot
 from vmr.menu import (
     BLOCKS,
+    ExistingDataStatus,
     MenuSelection,
     TextEntryState,
+    check_existing_data,
+    draw_duplicate_warning,
     draw_menu,
     draw_text_entry,
     existing_trial_count,
     handle_menu_key,
     handle_text_entry_key,
+    normalize_subject_id,
     session_paths,
 )
 from vmr.schedule import Schedule, TrialSpec, build_schedule
@@ -90,6 +95,76 @@ class QuitRequested(Exception):
 
 
 PollEventsFn = Callable[[Config], FrameEvents]
+
+
+def _resolution_matches(a: tuple[int, int], b: tuple[int, int], tolerance: int = 1) -> bool:
+    """True if `a` and `b` plausibly describe the same physical display,
+    allowing for a 2x HiDPI scale-factor mismatch between the two APIs
+    being compared — pygame's desktop sizes and Quartz's
+    CGDisplayPixelsWide/High don't reliably agree on whether they report
+    logical points or backing pixels for a Retina display."""
+    aw, ah = a
+    bw, bh = b
+    for scale in (1, 2, 0.5):
+        if abs(aw * scale - bw) <= tolerance and abs(ah * scale - bh) <= tolerance:
+            return True
+    return False
+
+
+def resolve_display_index(quartz_module=None, pygame_module=None) -> int:
+    """Which SDL/pygame display index corresponds to whichever display
+    macOS currently calls "Main" (has the menu bar).
+
+    pygame's own default (display=0) is NOT reliably the same display —
+    confirmed by testing: it stayed on the built-in MacBook panel even
+    with an external monitor explicitly set as Main Display in System
+    Settings, because SDL's display order follows OS enumeration/
+    connection order, not the Main Display setting (to-decide.md #31).
+    This instead matches displays by resolution against Quartz's
+    CGMainDisplayID, so window placement and vmr.display_calibration's
+    auto-detection can never disagree about which screen is meant.
+
+    Falls back to display 0 (pygame's own default) with a warning if
+    there's only one display (nothing to disambiguate — that IS display
+    0), or if detection fails or is ambiguous (e.g. two displays happen
+    to share the exact same resolution).
+    """
+    pg = pygame_module or pygame
+    if pg.display.get_num_displays() <= 1:
+        return 0
+
+    main_resolution = detect_main_display_resolution_px(quartz_module)
+    if main_resolution is None:
+        warnings.warn(
+            "could not determine the main display via Quartz; defaulting "
+            "to display 0, which may not be the intended screen"
+        )
+        return 0
+
+    sizes = pg.display.get_desktop_sizes()
+    matches = [i for i, size in enumerate(sizes) if _resolution_matches(size, main_resolution)]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        warnings.warn(
+            f"multiple displays match the main display's resolution {main_resolution}; defaulting to display 0"
+        )
+    else:
+        warnings.warn(
+            f"no display matches the main display's resolution {main_resolution}; defaulting to display 0"
+        )
+    return 0
+
+
+def open_display(windowed_size: tuple[int, int] | None) -> pygame.Surface:
+    """Opens the pygame window: fullscreen on whichever display macOS
+    currently considers Main (resolve_display_index), or the given size
+    in a regular window for --windowed/dev use (always display 0 there —
+    a dev window's exact screen doesn't matter)."""
+    if windowed_size is not None:
+        return pygame.display.set_mode(windowed_size)
+    display_index = resolve_display_index()
+    return pygame.display.set_mode((0, 0), pygame.FULLSCREEN, display=display_index)
 
 
 def run_trial(
@@ -178,10 +253,7 @@ def run_block(
 
     pygame.init()
     pygame.font.init()
-    if windowed_size is not None:
-        screen = pygame.display.set_mode(windowed_size)
-    else:
-        screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    screen = open_display(windowed_size)
     width, height = screen.get_size()
 
     # Resolved after the window exists: auto-detection needs the actual
@@ -236,9 +308,43 @@ def run_block(
     return schedule
 
 
-def run_interactive_menu(screen: pygame.Surface, clock: pygame.time.Clock | None = None) -> tuple[str, str]:
-    """The 起始畫面: block selection, then subject-ID entry. Returns
-    (subject_id, block_name). Raises QuitRequested on ESC/window-close."""
+def wait_for_duplicate_choice(
+    screen: pygame.Surface,
+    font: pygame.font.Font,
+    clock: pygame.time.Clock,
+    subject_id: str,
+    block_name: str,
+    status: ExistingDataStatus,
+) -> str:
+    """Blocks until the experimenter picks "resume" (R) or "retry" with a
+    different subject ID (N). Raises QuitRequested on ESC/window-close."""
+    while True:
+        draw_duplicate_warning(screen, font, subject_id, block_name, status)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                raise QuitRequested
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    raise QuitRequested
+                if event.key == pygame.K_r:
+                    return "resume"
+                if event.key == pygame.K_n:
+                    return "retry"
+        clock.tick(30)
+
+
+def run_interactive_menu(
+    screen: pygame.Surface,
+    clock: pygame.time.Clock | None = None,
+    data_dir: str | Path = "data",
+) -> tuple[str, str]:
+    """The 起始畫面: block selection, then subject-ID entry. If that
+    subject/block already has trials logged, warns and requires an
+    explicit Resume/different-ID choice before proceeding — prevents an
+    accidentally-reused subject ID from silently resuming (or worse,
+    partially merging into) a different person's data (to-decide.md #32).
+    Returns (subject_id, block_name). Raises QuitRequested on
+    ESC/window-close/cancel."""
     clock = clock or pygame.time.Clock()
     font = pygame.font.SysFont(None, 40)
 
@@ -255,20 +361,29 @@ def run_interactive_menu(screen: pygame.Surface, clock: pygame.time.Clock | None
                 block_name = handle_menu_key(selection, event.key)
         clock.tick(30)
 
-    entry = TextEntryState()
-    confirmed = False
-    while not confirmed:
-        draw_text_entry(screen, font, "Enter subject ID, then press Enter:", entry)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                raise QuitRequested
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
+    while True:
+        entry = TextEntryState()
+        confirmed = False
+        while not confirmed:
+            draw_text_entry(screen, font, "Enter subject ID, then press Enter:", entry)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
                     raise QuitRequested
-                confirmed = handle_text_entry_key(entry, event)
-        clock.tick(30)
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        raise QuitRequested
+                    confirmed = handle_text_entry_key(entry, event)
+            clock.tick(30)
 
-    return entry.text, block_name
+        subject_id = normalize_subject_id(entry.text)  # to-decide.md #33: strip only, case preserved
+        status = check_existing_data(data_dir, subject_id, block_name)
+        if status is None:
+            return subject_id, block_name
+
+        choice = wait_for_duplicate_choice(screen, font, clock, subject_id, block_name, status)
+        if choice == "resume":
+            return subject_id, block_name
+        # "retry": loop back and let them type a different ID
 
 
 def main() -> None:
@@ -281,18 +396,33 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--data-dir", default="data")
     parser.add_argument("--windowed", action="store_true")
+    parser.add_argument(
+        "--yes", action="store_true",
+        help="skip the duplicate-subject confirmation prompt (for scripted/known-good resumes)",
+    )
     args = parser.parse_args()
     windowed_size = (1280, 800) if args.windowed else None
 
     if args.subject and args.block:
-        run_block(subject_id=args.subject, block_name=args.block, seed=args.seed, data_dir=args.data_dir, windowed_size=windowed_size)
+        subject_id = normalize_subject_id(args.subject)  # to-decide.md #33
+        status = check_existing_data(args.data_dir, subject_id, args.block)
+        if status is not None and not args.yes:
+            print(
+                f"Subject '{subject_id}' / block '{args.block}' already has {status.n_trials} "
+                f"trial(s) logged (last touched {status.last_modified})."
+            )
+            answer = input("Resume this subject? [y/N] ").strip().lower()
+            if answer != "y":
+                print("Cancelled. Re-run with a different --subject if this is a different participant.")
+                return
+        run_block(subject_id=subject_id, block_name=args.block, seed=args.seed, data_dir=args.data_dir, windowed_size=windowed_size)
         return
 
     pygame.init()
     pygame.font.init()
-    screen = pygame.display.set_mode(windowed_size if windowed_size else (0, 0), 0 if windowed_size else pygame.FULLSCREEN)
+    screen = open_display(windowed_size)
     try:
-        subject_id, block_name = run_interactive_menu(screen)
+        subject_id, block_name = run_interactive_menu(screen, data_dir=args.data_dir)
     except QuitRequested:
         pygame.quit()
         return

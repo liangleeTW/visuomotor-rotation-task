@@ -23,8 +23,16 @@ import pytest
 
 from vmr.config import load_config
 from vmr.display_calibration import Calibration
-from vmr.menu import BLOCKS
-from vmr.orchestration import FrameEvents, run_block, run_interactive_menu
+from vmr.menu import BLOCKS, ExistingDataStatus
+from vmr.orchestration import (
+    FrameEvents,
+    QuitRequested,
+    _resolution_matches,
+    resolve_display_index,
+    run_block,
+    run_interactive_menu,
+    wait_for_duplicate_choice,
+)
 
 
 def make_fast_test_config():
@@ -117,7 +125,7 @@ def test_run_block_familiarization_end_to_end(tmp_path, monkeypatch):
     assert len(sample_rows) > 0
 
 
-def test_run_interactive_menu_returns_selection_and_subject_id(monkeypatch):
+def test_run_interactive_menu_returns_selection_and_subject_id(monkeypatch, tmp_path):
     pygame.init()
     pygame.font.init()
     screen = pygame.display.set_mode((400, 300))
@@ -139,10 +147,212 @@ def test_run_interactive_menu_returns_selection_and_subject_id(monkeypatch):
     )
     monkeypatch.setattr(pygame.event, "get", lambda: next(scripted_batches, []))
 
-    subject_id, block_name = run_interactive_menu(screen, clock=pygame.time.Clock())
+    subject_id, block_name = run_interactive_menu(screen, clock=pygame.time.Clock(), data_dir=tmp_path)
     assert block_name == BLOCKS[1]  # one K_DOWN from the first option
     assert subject_id == "s01"
     pygame.quit()
+
+
+def test_run_interactive_menu_strips_whitespace_from_subject_id(monkeypatch, tmp_path):
+    """to-decide.md #33: leading/trailing whitespace is stripped, and a
+    whitespace-only entry doesn't count as confirmed."""
+    pygame.init()
+    pygame.font.init()
+    screen = pygame.display.set_mode((400, 300))
+
+    scripted_batches = iter(
+        [
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode="")],  # pick BLOCKS[0]
+            # a leading space, then "S01", then a trailing space, then Enter
+            [
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE, unicode=" "),
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_s, unicode="S"),
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_0, unicode="0"),
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1, unicode="1"),
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE, unicode=" "),
+            ],
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode="")],
+        ]
+    )
+    monkeypatch.setattr(pygame.event, "get", lambda: next(scripted_batches, []))
+
+    subject_id, block_name = run_interactive_menu(screen, clock=pygame.time.Clock(), data_dir=tmp_path)
+    assert subject_id == "S01"  # not " S01 ", and case preserved
+    assert block_name == BLOCKS[0]
+    pygame.quit()
+
+
+def test_run_interactive_menu_warns_on_duplicate_and_retry_lets_you_pick_a_new_id(monkeypatch, tmp_path):
+    """to-decide.md #32: an ID that already has trials logged must be
+    confirmed, not silently resumed or silently rejected."""
+    pygame.init()
+    pygame.font.init()
+    screen = pygame.display.set_mode((400, 300))
+
+    # Pre-populate S01/familiarization with one logged trial.
+    from vmr.menu import session_paths
+
+    paths = session_paths(tmp_path, "S01", BLOCKS[0])
+    paths.trials_csv.parent.mkdir(parents=True)
+    paths.trials_csv.write_text("a,b\n1,2\n")
+
+    scripted_batches = iter(
+        [
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode="")],  # pick BLOCKS[0]
+            [  # type "S01", confirm -> triggers the duplicate warning
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_s, unicode="S"),
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_0, unicode="0"),
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1, unicode="1"),
+            ],
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode="")],
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_n, unicode="n")],  # "different ID" choice
+            [  # type "S02", confirm -> no existing data, returns immediately
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_s, unicode="S"),
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_0, unicode="0"),
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_2, unicode="2"),
+            ],
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode="")],
+        ]
+    )
+    monkeypatch.setattr(pygame.event, "get", lambda: next(scripted_batches, []))
+
+    subject_id, block_name = run_interactive_menu(screen, clock=pygame.time.Clock(), data_dir=tmp_path)
+    assert subject_id == "S02"
+    assert block_name == BLOCKS[0]
+    pygame.quit()
+
+
+def test_run_interactive_menu_duplicate_resume_choice_keeps_same_id(monkeypatch, tmp_path):
+    pygame.init()
+    pygame.font.init()
+    screen = pygame.display.set_mode((400, 300))
+
+    from vmr.menu import session_paths
+
+    paths = session_paths(tmp_path, "S01", BLOCKS[0])
+    paths.trials_csv.parent.mkdir(parents=True)
+    paths.trials_csv.write_text("a,b\n1,2\n")
+
+    scripted_batches = iter(
+        [
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode="")],  # pick BLOCKS[0]
+            [
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_s, unicode="S"),
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_0, unicode="0"),
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1, unicode="1"),
+            ],
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode="")],
+            [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_r, unicode="r")],  # "resume" choice
+        ]
+    )
+    monkeypatch.setattr(pygame.event, "get", lambda: next(scripted_batches, []))
+
+    subject_id, block_name = run_interactive_menu(screen, clock=pygame.time.Clock(), data_dir=tmp_path)
+    assert subject_id == "S01"
+    assert block_name == BLOCKS[0]
+    pygame.quit()
+
+
+def test_wait_for_duplicate_choice_escape_raises_quit(monkeypatch):
+    pygame.init()
+    pygame.font.init()
+    screen = pygame.display.set_mode((400, 300))
+    font = pygame.font.SysFont(None, 32)
+    monkeypatch.setattr(
+        pygame.event, "get", lambda: [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, unicode="")]
+    )
+    status = ExistingDataStatus(n_trials=3, last_modified="2026-01-01 00:00")
+    with pytest.raises(QuitRequested):
+        wait_for_duplicate_choice(screen, font, pygame.time.Clock(), "S01", BLOCKS[0], status)
+    pygame.quit()
+
+
+# ---------------------------------------------------------------------------
+# resolve_display_index / _resolution_matches (to-decide.md #31)
+# ---------------------------------------------------------------------------
+
+
+class _FakeDisplayModule:
+    def __init__(self, num_displays, sizes):
+        self._num = num_displays
+        self._sizes = sizes
+
+    def get_num_displays(self):
+        return self._num
+
+    def get_desktop_sizes(self):
+        return self._sizes
+
+
+class _FakePygameForDisplay:
+    def __init__(self, num_displays, sizes):
+        self.display = _FakeDisplayModule(num_displays, sizes)
+
+
+class _FakeQuartzForDisplay:
+    def __init__(self, width_px, height_px, raise_error=False):
+        self.width_px = width_px
+        self.height_px = height_px
+        self.raise_error = raise_error
+
+    def CGMainDisplayID(self):
+        if self.raise_error:
+            raise RuntimeError("no display")
+        return 1
+
+    def CGDisplayPixelsWide(self, display_id):
+        return self.width_px
+
+    def CGDisplayPixelsHigh(self, display_id):
+        return self.height_px
+
+
+def test_resolution_matches_exact():
+    assert _resolution_matches((1920, 1080), (1920, 1080))
+
+
+def test_resolution_matches_2x_scale():
+    assert _resolution_matches((1512, 982), (3024, 1964))  # points vs. backing pixels
+    assert _resolution_matches((3024, 1964), (1512, 982))
+
+
+def test_resolution_matches_false_when_unrelated():
+    assert not _resolution_matches((1920, 1080), (1512, 982))
+
+
+def test_resolve_display_index_single_display_skips_quartz_entirely():
+    pg = _FakePygameForDisplay(num_displays=1, sizes=[(1512, 982)])
+    quartz = _FakeQuartzForDisplay(width_px=0, height_px=0, raise_error=True)  # would blow up if ever called
+    assert resolve_display_index(quartz_module=quartz, pygame_module=pg) == 0
+
+
+def test_resolve_display_index_matches_main_display_by_resolution():
+    # this is the exact scenario that was broken: main display is the
+    # SECOND entry in pygame's enumeration, not index 0
+    pg = _FakePygameForDisplay(num_displays=2, sizes=[(1512, 982), (1920, 1080)])
+    quartz = _FakeQuartzForDisplay(width_px=1920, height_px=1080)
+    assert resolve_display_index(quartz_module=quartz, pygame_module=pg) == 1
+
+
+def test_resolve_display_index_falls_back_to_zero_when_no_match(recwarn):
+    pg = _FakePygameForDisplay(num_displays=2, sizes=[(1512, 982), (1920, 1080)])
+    quartz = _FakeQuartzForDisplay(width_px=2560, height_px=1440)  # matches neither
+    assert resolve_display_index(quartz_module=quartz, pygame_module=pg) == 0
+    assert any("no display matches" in str(w.message) for w in recwarn.list)
+
+
+def test_resolve_display_index_falls_back_to_zero_when_ambiguous(recwarn):
+    pg = _FakePygameForDisplay(num_displays=2, sizes=[(1920, 1080), (1920, 1080)])
+    quartz = _FakeQuartzForDisplay(width_px=1920, height_px=1080)
+    assert resolve_display_index(quartz_module=quartz, pygame_module=pg) == 0
+    assert any("multiple displays match" in str(w.message) for w in recwarn.list)
+
+
+def test_resolve_display_index_falls_back_to_zero_when_detection_fails(recwarn):
+    pg = _FakePygameForDisplay(num_displays=2, sizes=[(1512, 982), (1920, 1080)])
+    quartz = _FakeQuartzForDisplay(width_px=0, height_px=0, raise_error=True)
+    assert resolve_display_index(quartz_module=quartz, pygame_module=pg) == 0
+    assert any("could not determine the main display" in str(w.message) for w in recwarn.list)
 
 
 def test_run_block_resumes_without_rerunning_completed_trials(tmp_path, monkeypatch):
@@ -184,3 +394,66 @@ def test_run_block_resumes_without_rerunning_completed_trials(tmp_path, monkeypa
         rows = list(csv.DictReader(f))
     assert len(rows) == 2
     assert [r["trial_index"] for r in rows] == ["0", "1"]
+
+
+# ---------------------------------------------------------------------------
+# main() CLI-path duplicate-ID confirmation (to-decide.md #32)
+# ---------------------------------------------------------------------------
+
+
+def test_main_cli_path_cancels_on_no_without_calling_run_block(tmp_path, monkeypatch):
+    from vmr.menu import session_paths
+    from vmr.orchestration import main
+
+    paths = session_paths(tmp_path, "S01", "familiarization")
+    paths.trials_csv.parent.mkdir(parents=True)
+    paths.trials_csv.write_text("a,b\n1,2\n")
+
+    called = []
+    monkeypatch.setattr("vmr.orchestration.run_block", lambda **kwargs: called.append(kwargs))
+    monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+    monkeypatch.setattr(
+        "sys.argv", ["run_block.py", "--subject", "S01", "--block", "familiarization", "--data-dir", str(tmp_path)]
+    )
+
+    main()
+    assert called == []  # run_block must never have been invoked
+
+
+def test_main_cli_path_proceeds_on_yes_flag_without_prompting(tmp_path, monkeypatch):
+    from vmr.menu import session_paths
+    from vmr.orchestration import main
+
+    paths = session_paths(tmp_path, "S01", "familiarization")
+    paths.trials_csv.parent.mkdir(parents=True)
+    paths.trials_csv.write_text("a,b\n1,2\n")
+
+    called = []
+
+    def fake_input(prompt=""):
+        raise AssertionError("input() should not be called when --yes is passed")
+
+    monkeypatch.setattr("vmr.orchestration.run_block", lambda **kwargs: called.append(kwargs))
+    monkeypatch.setattr("builtins.input", fake_input)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["run_block.py", "--subject", "S01", "--block", "familiarization", "--data-dir", str(tmp_path), "--yes"],
+    )
+
+    main()
+    assert len(called) == 1
+    assert called[0]["subject_id"] == "S01"
+
+
+def test_main_cli_path_normalizes_whitespace_in_subject_flag(tmp_path, monkeypatch):
+    from vmr.orchestration import main
+
+    called = []
+    monkeypatch.setattr("vmr.orchestration.run_block", lambda **kwargs: called.append(kwargs))
+    monkeypatch.setattr(
+        "sys.argv", ["run_block.py", "--subject", "  S01  ", "--block", "familiarization", "--data-dir", str(tmp_path)]
+    )
+
+    main()
+    assert len(called) == 1
+    assert called[0]["subject_id"] == "S01"

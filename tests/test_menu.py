@@ -13,13 +13,17 @@ import pytest
 
 from vmr.menu import (
     BLOCKS,
+    ExistingDataStatus,
     MenuSelection,
     TextEntryState,
+    check_existing_data,
+    draw_duplicate_warning,
     draw_menu,
     draw_text_entry,
     existing_trial_count,
     handle_menu_key,
     handle_text_entry_key,
+    normalize_subject_id,
     session_paths,
 )
 
@@ -88,6 +92,13 @@ def test_text_entry_confirm_requires_nonempty():
     assert handle_text_entry_key(state, make_key_event(pygame.K_RETURN)) is True
 
 
+def test_text_entry_confirm_rejects_whitespace_only():
+    state = TextEntryState()
+    state.input_char(" ")
+    state.input_char(" ")
+    assert handle_text_entry_key(state, make_key_event(pygame.K_RETURN)) is False
+
+
 def test_handle_text_entry_key_appends_unicode_and_backspaces():
     state = TextEntryState()
     handle_text_entry_key(state, make_key_event(pygame.K_a, unicode="a"))
@@ -133,6 +144,51 @@ def test_existing_trial_count_header_only_is_zero(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# normalize_subject_id (to-decide.md #33)
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_subject_id_strips_leading_and_trailing_whitespace():
+    assert normalize_subject_id("  S01  ") == "S01"
+    assert normalize_subject_id("\tS01\n") == "S01"
+
+
+def test_normalize_subject_id_preserves_case():
+    assert normalize_subject_id("s01") == "s01"
+    assert normalize_subject_id("S01") == "S01"
+
+
+def test_normalize_subject_id_preserves_internal_whitespace():
+    assert normalize_subject_id("  S 01  ") == "S 01"
+
+
+# ---------------------------------------------------------------------------
+# check_existing_data (to-decide.md #32)
+# ---------------------------------------------------------------------------
+
+
+def test_check_existing_data_none_when_no_file(tmp_path):
+    assert check_existing_data(tmp_path, "S01", "baseline") is None
+
+
+def test_check_existing_data_reports_count_and_mtime(tmp_path):
+    paths = session_paths(tmp_path, "S01", "baseline")
+    paths.trials_csv.parent.mkdir(parents=True)
+    paths.trials_csv.write_text("a,b\n1,2\n3,4\n")
+    status = check_existing_data(tmp_path, "S01", "baseline")
+    assert status is not None
+    assert status.n_trials == 2
+    assert isinstance(status.last_modified, str) and status.last_modified  # non-empty
+
+
+def test_check_existing_data_none_when_header_only(tmp_path):
+    paths = session_paths(tmp_path, "S01", "baseline")
+    paths.trials_csv.parent.mkdir(parents=True)
+    paths.trials_csv.write_text("a,b\n")
+    assert check_existing_data(tmp_path, "S01", "baseline") is None
+
+
+# ---------------------------------------------------------------------------
 # rendering smoke tests (headless, via tests/conftest.py dummy drivers)
 # ---------------------------------------------------------------------------
 
@@ -159,3 +215,10 @@ def test_draw_text_entry_smoke():
     font = pygame.font.SysFont(None, 32)
     state = TextEntryState("S01")
     draw_text_entry(screen, font, "Enter subject ID:", state)  # must not raise
+
+
+def test_draw_duplicate_warning_smoke():
+    screen = pygame.display.set_mode((800, 600))
+    font = pygame.font.SysFont(None, 32)
+    status = ExistingDataStatus(n_trials=5, last_modified="2026-09-03 14:22")
+    draw_duplicate_warning(screen, font, "S01", BLOCKS[0], status)  # must not raise
