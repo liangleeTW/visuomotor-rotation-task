@@ -86,6 +86,7 @@ class SessionPaths:
     samples_csv: Path
     schedule_csv: Path
     config_snapshot_yaml: Path
+    calibration_used_json: Path
 
 
 def session_paths(data_dir: str | Path, subject_id: str, block_name: str) -> SessionPaths:
@@ -95,6 +96,7 @@ def session_paths(data_dir: str | Path, subject_id: str, block_name: str) -> Ses
         samples_csv=base / "samples.csv",
         schedule_csv=base / "schedule.csv",
         config_snapshot_yaml=base / "config_snapshot.yaml",
+        calibration_used_json=base / "calibration_used.json",
     )
 
 

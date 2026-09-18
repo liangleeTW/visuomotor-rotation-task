@@ -33,7 +33,7 @@ import pygame
 from vmr.audio import SoundBank
 from vmr.config import Config, load_config
 from vmr.display import Renderer
-from vmr.display_calibration import require_calibration
+from vmr.display_calibration import resolve_calibration, save_calibration
 from vmr.geometry import GeometryParams
 from vmr.input_device import CursorTracker, PygameRelativeMouse
 from vmr.logging_io import TrialLogger, save_config_snapshot
@@ -175,7 +175,6 @@ def run_block(
     resuming automatically if some trials were already logged. Returns the
     Schedule used (useful for tests/inspection)."""
     cfg = cfg or load_config()
-    calibration = require_calibration()
 
     pygame.init()
     pygame.font.init()
@@ -184,6 +183,11 @@ def run_block(
     else:
         screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     width, height = screen.get_size()
+
+    # Resolved after the window exists: auto-detection needs the actual
+    # pixel resolution, and a manual override (if one was run) always
+    # wins over it — see vmr/display_calibration.py.
+    calibration = resolve_calibration((width, height))
 
     params = GeometryParams.from_config(cfg, calibration.px_per_cm, home_x_px=width / 2, home_y_px=height / 2)
     renderer = Renderer(screen, cfg.colors, params)
@@ -199,6 +203,7 @@ def run_block(
     if n_existing == 0:
         paths.trials_csv.parent.mkdir(parents=True, exist_ok=True)
         save_config_snapshot(cfg.raw, paths.config_snapshot_yaml)
+        save_calibration(calibration, paths.calibration_used_json)  # provenance: what px/cm this session actually used
         import pandas as pd  # local import: only needed for this one-off save
 
         pd.DataFrame([vars(t) for t in block_trials]).to_csv(paths.schedule_csv, index=False)

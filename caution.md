@@ -79,6 +79,15 @@ that will not show up as an obvious bug, only as noisier/biased angle data.
 - Local storage only, no server: **back up the data folder after every
   session** (external drive, cloud sync, whatever is convenient) — a single
   disk failure with no backup loses everything.
+- **Display calibration (px/cm) is automatic**, detected fresh each session
+  from the display's real physical size — no manual step needed under
+  normal use. It's recorded per-session in
+  `data/<subject>/<block>/calibration_used.json`; if you ever switch to an
+  unfamiliar external monitor, glance at that file's `px_per_cm` once to
+  make sure it's a plausible value (a 24"-27" monitor should land roughly
+  in the 35-45 px/cm range) before trusting a full session to it. If it
+  looks wrong, run `poetry run python -m vmr.display_calibration` once to
+  override it with a ruler measurement (to-decide.md #18).
 
 ## Known open technical decisions
 See `to-decide.md` for parameters (hit-zone radius, sampling approach, etc.)

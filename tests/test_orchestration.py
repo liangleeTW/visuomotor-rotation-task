@@ -79,7 +79,7 @@ def always_space(cfg) -> FrameEvents:
 
 def test_run_block_familiarization_end_to_end(tmp_path, monkeypatch):
     fake_calibration = Calibration(px_per_cm=50.0, measured_at="test", display_resolution=(400, 300))
-    monkeypatch.setattr("vmr.orchestration.require_calibration", lambda: fake_calibration)
+    monkeypatch.setattr("vmr.orchestration.resolve_calibration", lambda screen_resolution_px: fake_calibration)
 
     cfg = make_fast_test_config()
     schedule = run_block(
@@ -98,11 +98,13 @@ def test_run_block_familiarization_end_to_end(tmp_path, monkeypatch):
     samples_path = tmp_path / "TEST01" / "familiarization" / "samples.csv"
     schedule_path = tmp_path / "TEST01" / "familiarization" / "schedule.csv"
     snapshot_path = tmp_path / "TEST01" / "familiarization" / "config_snapshot.yaml"
+    calibration_path = tmp_path / "TEST01" / "familiarization" / "calibration_used.json"
 
     assert trials_path.exists()
     assert samples_path.exists()
     assert schedule_path.exists()
     assert snapshot_path.exists()
+    assert calibration_path.exists()
 
     with open(trials_path) as f:
         rows = list(csv.DictReader(f))
@@ -145,7 +147,7 @@ def test_run_interactive_menu_returns_selection_and_subject_id(monkeypatch):
 
 def test_run_block_resumes_without_rerunning_completed_trials(tmp_path, monkeypatch):
     fake_calibration = Calibration(px_per_cm=50.0, measured_at="test", display_resolution=(400, 300))
-    monkeypatch.setattr("vmr.orchestration.require_calibration", lambda: fake_calibration)
+    monkeypatch.setattr("vmr.orchestration.resolve_calibration", lambda screen_resolution_px: fake_calibration)
 
     cfg = load_config()
     cfg = dataclasses.replace(

@@ -24,10 +24,11 @@ should be checked off with its own verification, not just "written."
 
 ## 2. Geometry module (pure functions, no display — build & test first)
 - [x] px↔cm conversion from real display physical size at runtime — geometry.py
-      accepts px_per_cm as an input (GeometryParams.from_config); actual
-      measurement lives in `vmr/display_calibration.py` (ruler-based
-      interactive routine + cached JSON, to-decide.md #18), not auto-detected
-      from EDID/OS APIs since those are unreliable for external monitors
+      accepts px_per_cm as an input (GeometryParams.from_config).
+      `vmr/display_calibration.py::resolve_calibration` auto-detects it via
+      macOS's Quartz API by default (no setup required); the ruler-based
+      manual routine only exists as an override, for the rare case
+      auto-detection is wrong (to-decide.md #18, revised 2026-09-18)
 - [x] target position from angle + radius
 - [x] rotation transform (CW/CCW sign convention), applied to displayed
       cursor only, raw trajectory untouched

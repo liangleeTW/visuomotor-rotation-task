@@ -92,6 +92,24 @@ trivial to change later. Revisit after the first pilot subject.
     physical panel size and current resolution, not hardcoded to the spec's
     `px: 391` (which assumes one specific display/resolution). Makes the
     code correct on whatever machine actually runs it.
+    **Revised 2026-09-18** (raised by PI: calibration shouldn't be a
+    mandatory manual step): `resolve_calibration()` now auto-detects the
+    physical size via macOS's own Quartz API (`CGDisplayScreenSize`),
+    which is accurate for a real, connected display — no setup required,
+    the experiment runs out of the box. A manually-measured calibration
+    (the ruler routine, `python -m vmr.display_calibration`) is saved to
+    `display_calibration.json` at the project root and, if present,
+    **always overrides** auto-detection — it exists only for the rare case
+    auto-detection is wrong (e.g. some external monitors report bad EDID
+    data) or Quartz is unavailable. Auto-detected values are never cached
+    to disk (detection is instant, and not caching means a monitor swap
+    is picked up immediately); whichever value was actually used is
+    recorded per-session in `data/<subject>/<block>/calibration_used.json`
+    for provenance.
+    **Revisit if**: you swap to an external monitor where auto-detection
+    turns out to be wrong — the symptom would be reaches feeling
+    mis-scaled relative to the intended 7cm distance. Run the manual
+    calibration once to override it.
 
 ---
 

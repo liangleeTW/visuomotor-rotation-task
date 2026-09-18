@@ -16,15 +16,27 @@ Then, **once per machine**, before the first session:
 1. Apply the macOS settings in `caution.md` (pointer acceleration,
    trackpad gestures, Do Not Disturb, etc.) and verify pointer
    acceleration is actually off, not just set.
-2. Run the display calibration (measures px/cm with a physical ruler —
-   see to-decide.md #18 for why this isn't auto-detected):
-   ```bash
-   poetry run python -m vmr.display_calibration
-   ```
-3. Add the audio assets once available (`go_beep.wav`, `hit_bell.wav`,
+2. Add the audio assets once available (`go_beep.wav`, `hit_bell.wav`,
    `miss_buzz.wav`) to `assets/audio/`. Missing files degrade to silent
    playback with a warning, so the experiment runs without them, but
    real sessions need real sounds.
+
+Display calibration (px/cm) is **automatic** — it's detected from the
+display's actual physical size via macOS's own APIs the moment a session
+starts, no setup step required. You never need to run anything for this
+under normal use. If you ever suspect it's wrong (e.g. on an external
+monitor with unusual EDID data — reaches would feel mis-scaled relative
+to the intended 7cm distance), you can override it once with a manual
+ruler measurement, which then takes precedence permanently until you
+delete it:
+```bash
+poetry run python -m vmr.display_calibration          # saves display_calibration.json
+poetry run python -m vmr.display_calibration --recalibrate   # redo it
+rm display_calibration.json                             # go back to auto-detection
+```
+Whichever value was actually used for a session (auto-detected or
+manually overridden) is recorded in
+`data/<subject>/<block>/calibration_used.json` for that session.
 
 ## Running a session
 

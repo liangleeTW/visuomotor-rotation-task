@@ -1,21 +1,22 @@
 """
-Runtime px-per-cm calibration (to-decide.md #18).
+Runtime px-per-cm resolution (to-decide.md #18).
 
-Rather than trust a display's reported physical size (inaccurate for many
-external monitors, and the spec's own `px: 391` figure assumes one
-specific screen), this measures it empirically once per machine: an
-on-screen line of a known pixel length is measured with a physical ruler,
-and the resulting px/cm is cached to disk so future sessions don't need to
-re-measure. See caution.md's "verify pointer acceleration empirically"
-note — this is the same philosophy applied to screen geometry.
+px/cm is auto-detected by default — macOS reports the physical size of a
+connected display accurately via Quartz (CGDisplayScreenSize), which is
+what resolve_calibration() uses automatically on every run, no setup
+required. A manually-measured calibration (via the interactive ruler
+routine below, saved to disk) is only needed as an override, for the rare
+case auto-detection is wrong or unavailable (e.g. some external monitors
+with missing/incorrect EDID data, or a machine without Quartz). If a
+manual calibration file exists, it always takes precedence over
+auto-detection, since running it is a deliberate correction.
 
 Flags:
-    --recalibrate   Force a fresh measurement even if a cached one exists
-                     (only relevant to the interactive routine, not to code
-                     that just loads a cached value)
+    --recalibrate   Force a fresh manual measurement even if a cached one
+                     exists (only relevant to the interactive routine)
 
 Usage:
-    poetry run python -m vmr.display_calibration            # run once, interactively
+    poetry run python -m vmr.display_calibration            # manual override, interactive
     poetry run python -m vmr.display_calibration --recalibrate
 """
 
@@ -64,18 +65,77 @@ def load_calibration(path: str | Path = DEFAULT_CALIBRATION_PATH) -> Calibration
     return Calibration(display_resolution=tuple(data["display_resolution"]), **{k: v for k, v in data.items() if k != "display_resolution"})
 
 
-def require_calibration(path: str | Path = DEFAULT_CALIBRATION_PATH) -> Calibration:
-    """Load the cached calibration or raise with instructions — used at
-    session startup so a missing calibration fails loudly rather than
-    silently falling back to a wrong px/cm value."""
-    cal = load_calibration(path)
-    if cal is None:
-        raise FileNotFoundError(
-            f"no display calibration found at {path}. Run "
-            "`poetry run python -m vmr.display_calibration` once on this "
-            "machine before starting a session (see caution.md)."
-        )
-    return cal
+# Physical sizes outside this range indicate CGDisplayScreenSize returned
+# garbage (some external-monitor/adapter combinations report 0 or absurd
+# values) rather than a real display — reject rather than silently using
+# a wrong px/cm.
+_MIN_PLAUSIBLE_MM = 100.0
+_MAX_PLAUSIBLE_MM = 2000.0
+
+
+def detect_physical_size_mm(quartz_module=None) -> tuple[float, float] | None:
+    """Auto-detect the main display's physical size in mm via Quartz.
+    Returns None (never raises) if Quartz isn't available (non-macOS, or
+    not installed) or the reported size is missing/implausible — callers
+    should fall back to manual calibration in that case."""
+    if quartz_module is None:
+        try:
+            import Quartz as quartz_module  # noqa: PLC0415
+        except ImportError:
+            return None
+    try:
+        display_id = quartz_module.CGMainDisplayID()
+        size = quartz_module.CGDisplayScreenSize(display_id)
+        width_mm, height_mm = size.width, size.height
+    except Exception:
+        return None
+    if not (_MIN_PLAUSIBLE_MM <= width_mm <= _MAX_PLAUSIBLE_MM):
+        return None
+    if not (_MIN_PLAUSIBLE_MM <= height_mm <= _MAX_PLAUSIBLE_MM):
+        return None
+    return (width_mm, height_mm)
+
+
+def detect_calibration(screen_resolution_px: tuple[int, int], quartz_module=None) -> Calibration | None:
+    """Auto-detected Calibration for the given pixel resolution, or None
+    if detection isn't possible (see detect_physical_size_mm)."""
+    physical = detect_physical_size_mm(quartz_module)
+    if physical is None:
+        return None
+    width_mm, height_mm = physical
+    width_px, _height_px = screen_resolution_px
+    px_per_cm = compute_px_per_cm(width_px, width_mm / 10.0)
+    return Calibration(
+        px_per_cm=px_per_cm,
+        measured_at=datetime.now(timezone.utc).isoformat(),
+        display_resolution=tuple(screen_resolution_px),
+        notes=f"auto-detected via Quartz CGDisplayScreenSize ({width_mm:.1f}mm x {height_mm:.1f}mm)",
+    )
+
+
+def resolve_calibration(
+    screen_resolution_px: tuple[int, int],
+    path: str | Path = DEFAULT_CALIBRATION_PATH,
+    quartz_module=None,
+) -> Calibration:
+    """The single entry point sessions should use. A manual calibration on
+    disk (an explicit correction the experimenter made) always wins;
+    otherwise this auto-detects fresh on every call — detection is cheap,
+    so there's no need to cache it, and not caching it means a monitor
+    swap is picked up immediately rather than sticking with a stale value.
+    Raises only if both are unavailable."""
+    manual = load_calibration(path)
+    if manual is not None:
+        return manual
+    detected = detect_calibration(screen_resolution_px, quartz_module)
+    if detected is not None:
+        return detected
+    raise FileNotFoundError(
+        f"could not auto-detect this display's physical size, and no manual "
+        f"calibration is cached at {path}. Run "
+        "`poetry run python -m vmr.display_calibration` once on this "
+        "machine (see caution.md)."
+    )
 
 
 def run_calibration_routine(line_length_px: float = 1000.0, path: str | Path = DEFAULT_CALIBRATION_PATH) -> Calibration:
