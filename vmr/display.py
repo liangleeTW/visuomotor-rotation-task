@@ -116,9 +116,8 @@ class Renderer:
             self.screen.blit(surf, (cx - surf.get_width() / 2, top + i * line_height))
 
     def draw_report_entry_overlay(self, entry: ReportEntryState) -> None:
-        magnitude = entry.magnitude if entry.magnitude is not None else "_"
-        side = entry.side or ("" if entry.magnitude in (None, 0) else "?")
-        text = f"回報: {magnitude} {side}"
+        # Echo the number in the ring's own format ("-10"), as it was spoken.
+        text = f"回報: {entry.text or '_'}"
         surf = self.small_font.render(text, True, self.colors.instruction_text)
         self.screen.blit(surf, (20, self.screen.get_height() - 40))
 

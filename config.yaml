@@ -82,9 +82,8 @@ audio:
   miss_buzz: miss_buzz.wav
 
 report_entry:
-  # to-decide.md #14: experimenter types magnitude, presses a side key, SPACE confirms
-  magnitude_range: [0, 31]
-  side_keys: {left: CCW, right: CW}
+  # to-decide.md #14: experimenter types the number as heard ("-10"), SPACE confirms
+  magnitude_range: [0, 31]  # bounds the number without its sign
 
 colors:
   # RGB triples, 0-255. Engineering defaults matching the spec's named

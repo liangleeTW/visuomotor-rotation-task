@@ -1,7 +1,8 @@
 """
 QC notebook: loads one subject/block's logged data and gives a first-pass
 read on data quality — hit rate, timing distributions, trajectory shapes,
-and any report trials that were skipped or came back empty.
+any report trials that were skipped or came back empty, and report
+trials where the participant drifted off home before the go signal.
 
 Flags (set the mo.ui.text default values below, or edit them interactively
 via `marimo edit`):
@@ -86,6 +87,25 @@ def _(mo, trials):
             mo.ui.table(missing_reports[["trial_index", "trial_type", "end_reason"]])
         else:
             mo.md("All report trials have a recorded report. ✓")
+    return
+
+
+@app.cell
+def _(mo, trials):
+    # flag report trials where the (hidden) cursor left home while the
+    # report was being entered — the participant may have started moving
+    # early. The cursor is put back on home at SPACE either way
+    # (to-decide.md #35); this is for judging whether to exclude the trial.
+    drift_threshold_mm = 2.5  # = home radius (config.yaml workspace.home_radius_mm)
+    if trials.empty or "report_wait_max_drift_mm" not in trials:
+        mo.md("_(no report-wait drift data)_")
+    else:
+        drifted = trials[trials["report_wait_max_drift_mm"] > drift_threshold_mm]
+        if len(drifted):
+            mo.md(f"**{len(drifted)} report trial(s) drifted off home during the report:**")
+            mo.ui.table(drifted[["trial_index", "trial_type", "report_wait_max_drift_mm"]])
+        else:
+            mo.md("No report trial drifted off home during the report. ✓")
     return
 
 

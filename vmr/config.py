@@ -105,7 +105,6 @@ class AudioConfig:
 @dataclass(frozen=True)
 class ReportEntryConfig:
     magnitude_range: tuple[int, int]
-    side_keys: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -187,7 +186,6 @@ def load_config(path: str | Path | None = None) -> Config:
         audio = AudioConfig(**raw["audio"])
         report_entry = ReportEntryConfig(
             magnitude_range=tuple(raw["report_entry"]["magnitude_range"]),
-            side_keys=dict(raw["report_entry"]["side_keys"]),
         )
         colors = ColorsConfig(**{k: tuple(v) for k, v in raw["colors"].items()})
     except KeyError as e:

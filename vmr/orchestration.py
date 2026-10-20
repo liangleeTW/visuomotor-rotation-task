@@ -61,12 +61,13 @@ from vmr.trial import FrameInput, TrialPhase, TrialRunner
 class FrameEvents:
     space_pressed: bool = False
     digit: int | None = None
-    side: str | None = None
+    minus: bool = False
     backspace: bool = False
     quit_requested: bool = False
 
 
-_DIGIT_KEYS = {getattr(pygame, f"K_{i}"): i for i in range(10)}
+# Top-row number keys and numeric-keypad keys both enter digits.
+_DIGIT_KEYS = {getattr(pygame, f"K_{i}"): i for i in range(10)} | {getattr(pygame, f"K_KP{i}"): i for i in range(10)}
 
 
 def poll_pygame_events(cfg: Config) -> FrameEvents:
@@ -83,10 +84,8 @@ def poll_pygame_events(cfg: Config) -> FrameEvents:
                 events.backspace = True
             elif event.key in _DIGIT_KEYS:
                 events.digit = _DIGIT_KEYS[event.key]
-            elif event.key == pygame.K_LEFT:
-                events.side = cfg.report_entry.side_keys["left"]
-            elif event.key == pygame.K_RIGHT:
-                events.side = cfg.report_entry.side_keys["right"]
+            elif event.key in (pygame.K_MINUS, pygame.K_KP_MINUS) or getattr(event, "unicode", "") == "-":
+                events.minus = True
     return events
 
 
@@ -191,7 +190,7 @@ def run_trial(
             raw_cursor_px=tracker.position,
             space_pressed=events.space_pressed,
             digit=events.digit,
-            side=events.side,
+            minus=events.minus,
             backspace=events.backspace,
         )
         runner.step(frame)
@@ -294,8 +293,13 @@ def run_block(
                 global_index = n_existing + offset
                 if spec.show_instruction and spec.instruction_key:
                     wait_for_space(renderer, spec.instruction_key, poll_events, cfg, clock)
+                # Finger movement during the ITI / instruction screen accumulates
+                # in the relative-mouse buffer; drop it so the trial starts on home.
+                mouse.poll_delta()
                 tracker.reset_to_home()
-                runner = TrialRunner(spec, cfg, params, play_sound=sound_bank.play)
+                runner = TrialRunner(
+                    spec, cfg, params, play_sound=sound_bank.play, reset_cursor=tracker.reset_to_home
+                )
                 run_trial(runner, mouse, tracker, renderer, clock, t0, cfg, poll_events)
                 logger.log_trial(global_index, schedule.seed, runner.result, runner.samples)
                 wait_iti(cfg.timing.inter_trial_interval_ms, poll_events, cfg, clock)

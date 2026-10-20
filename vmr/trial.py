@@ -13,6 +13,12 @@ tests/test_trial.py) before any display code exists.
 Flow:
     HOME_HOLD -> [REPORT_WAIT -> ] MOVING -> END_FEEDBACK -> DONE
 
+The cursor is hidden during REPORT_WAIT, so any drift then is invisible to
+the participant. On SPACE the runner calls reset_cursor() to put the
+cursor back on home before the reach (to-decide.md #35), and logs the
+largest drift as report_wait_max_drift_mm for QC. Reach-angle measures use
+only samples from the go signal onward.
+
 Flags:
     (none — this module is imported, not run directly)
 
@@ -59,7 +65,7 @@ class FrameInput:
     raw_cursor_px: Point
     space_pressed: bool = False
     digit: int | None = None
-    side: str | None = None
+    minus: bool = False
     backspace: bool = False
 
 
@@ -99,6 +105,7 @@ class TrialResult:
     speed_feedback: str | None
     movement_angle_at_50pct_reach: float | None
     movement_angle_initial_segment: float | None
+    report_wait_max_drift_mm: float | None  # report trials only; how far the hidden cursor strayed from home
 
 
 class TrialRunner:
@@ -108,11 +115,13 @@ class TrialRunner:
         cfg: Config,
         params: GeometryParams,
         play_sound: Callable[[str], None] | None = None,
+        reset_cursor: Callable[[], None] | None = None,
     ):
         self.spec = spec
         self.cfg = cfg
         self.params = params
         self.play_sound = play_sound or (lambda name: None)
+        self.reset_cursor = reset_cursor or (lambda: None)
 
         self.home_px: Point = (params.home_x_px, params.home_y_px)
         self.target_pos_px: Point = geometry.target_position_px(spec.target_angle_deg, params)
@@ -138,6 +147,8 @@ class TrialRunner:
         self._report_ready_t: float | None = None
         self._end_feedback_start_t: float | None = None
         self._displayed_pos: Point | None = self.home_px
+        self._report_wait_max_drift_px: float | None = None
+        self._moving_samples_start = 0
 
     # -- public -----------------------------------------------------------
 
@@ -205,15 +216,19 @@ class TrialRunner:
 
     def _step_report_wait(self, frame: FrameInput) -> None:
         self._record_sample(frame)
+        drift = geometry.distance(frame.raw_cursor_px, self.home_px)
+        self._report_wait_max_drift_px = max(self._report_wait_max_drift_px or 0.0, drift)
         entry = self.report_entry
+        if frame.minus:
+            entry.input_minus()
         if frame.digit is not None:
             entry.input_digit(frame.digit)
-        if frame.side is not None:
-            entry.select_side(frame.side)
         if frame.backspace:
             entry.backspace()
-        if entry.can_confirm() and self._report_ready_t is None:
-            self._report_ready_t = frame.t
+        # The report is "registered" at the last keystroke that left it
+        # confirmable, i.e. when the experimenter finished transcribing it.
+        if frame.minus or frame.digit is not None or frame.backspace:
+            self._report_ready_t = frame.t if entry.can_confirm() else None
         if frame.space_pressed and entry.can_confirm():
             self.reported = entry.confirm()
             self.report_registered_timestamp = self._report_ready_t
@@ -221,6 +236,12 @@ class TrialRunner:
             self._trigger_go_signal(frame.t)
 
     def _trigger_go_signal(self, t: float) -> None:
+        if self.phase is TrialPhase.REPORT_WAIT:
+            # Discard drift during the (cursor-hidden) report wait: the reach
+            # starts from home, as on every other trial (to-decide.md #35).
+            self.reset_cursor()
+            self._displayed_pos = self.home_px if self.spec.cursor_visible_during_movement else None
+        self._moving_samples_start = len(self.samples)
         self.go_signal_timestamp = t
         self.play_sound("go_beep")
         self.phase = TrialPhase.MOVING
@@ -274,11 +295,15 @@ class TrialRunner:
             self._finalize(frame.t)
 
     def _finalize(self, t: float) -> None:
-        trajectory = [(s.raw_x, s.raw_y) for s in self.samples]
+        trajectory = [(s.raw_x, s.raw_y) for s in self.samples[self._moving_samples_start :]]
         angle_50 = geometry.movement_angle_at_fraction(trajectory, self.home_px, self.target_pos_px, 0.5)
         r1_px = _INITIAL_SEGMENT_R1_CM * self.params.px_per_cm
         r2_px = _INITIAL_SEGMENT_R2_CM * self.params.px_per_cm
         angle_init = geometry.movement_angle_initial_segment(trajectory, self.home_px, r1_px, r2_px)
+
+        drift_mm = None
+        if self._report_wait_max_drift_px is not None:
+            drift_mm = self._report_wait_max_drift_px / self.params.px_per_cm * 10.0
 
         reported_angle = None
         if self.reported is not None:
@@ -313,5 +338,6 @@ class TrialRunner:
             speed_feedback=self.speed_feedback,
             movement_angle_at_50pct_reach=angle_50,
             movement_angle_initial_segment=angle_init,
+            report_wait_max_drift_mm=drift_mm,
         )
         self.phase = TrialPhase.DONE

@@ -62,7 +62,7 @@ class FakeMouse:
     regardless of which of the 4 cardinal targets was randomly assigned,
     without the fake needing to know the target position."""
 
-    def __init__(self, delta=(50.0, 50.0), settle_polls=3):
+    def __init__(self, delta=(50.0, 50.0), settle_polls=10):
         self.delta = delta
         self.settle_polls = settle_polls
         self._calls = 0
@@ -457,3 +457,50 @@ def test_main_cli_path_normalizes_whitespace_in_subject_flag(tmp_path, monkeypat
     main()
     assert len(called) == 1
     assert called[0]["subject_id"] == "S01"
+
+
+@pytest.mark.parametrize("key", [pygame.K_7, pygame.K_KP7])
+def test_top_row_and_keypad_digits_both_register(monkeypatch, key):
+    from vmr.orchestration import poll_pygame_events
+
+    monkeypatch.setattr(pygame.event, "get", lambda: [pygame.event.Event(pygame.KEYDOWN, key=key, unicode="7")])
+    assert poll_pygame_events(load_config()).digit == 7
+
+
+@pytest.mark.parametrize("key", [pygame.K_MINUS, pygame.K_KP_MINUS])
+def test_main_and_keypad_minus_both_register(monkeypatch, key):
+    from vmr.orchestration import poll_pygame_events
+
+    monkeypatch.setattr(pygame.event, "get", lambda: [pygame.event.Event(pygame.KEYDOWN, key=key, unicode="-")])
+    assert poll_pygame_events(load_config()).minus is True
+
+
+class StrayMovementMouse(FakeMouse):
+    """Reports a large delta on its first poll — finger movement that
+    accumulated while the instruction screen / ITI was showing."""
+
+    def poll_delta(self):
+        if self._calls == 0:
+            self._calls += 1
+            return (300.0, 300.0)
+        return super().poll_delta()
+
+
+def test_movement_between_trials_is_discarded(tmp_path, monkeypatch):
+    fake_calibration = Calibration(px_per_cm=50.0, measured_at="test", display_resolution=(400, 300))
+    monkeypatch.setattr("vmr.orchestration.resolve_calibration", lambda screen_resolution_px: fake_calibration)
+
+    run_block(
+        subject_id="TEST01",
+        block_name="familiarization",
+        cfg=make_fast_test_config(),
+        seed=1,
+        data_dir=tmp_path,
+        windowed_size=(400, 300),
+        poll_events=always_space,
+        mouse_factory=lambda: StrayMovementMouse(),
+    )
+    with open(tmp_path / "TEST01" / "familiarization" / "samples.csv") as f:
+        first = next(csv.DictReader(f))
+    assert float(first["raw_x"]) == pytest.approx(200.0)  # home = window centre
+    assert float(first["raw_y"]) == pytest.approx(150.0)

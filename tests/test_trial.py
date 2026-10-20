@@ -261,13 +261,13 @@ def test_report_trial_waits_for_valid_confirm():
     assert runner.phase is TrialPhase.REPORT_WAIT
     assert runner.go_signal_timestamp is None
 
-    # enter magnitude and side, then SPACE
+    # type "-11" as heard, then SPACE
+    runner.step(FrameInput(t=t, raw_cursor_px=(0.0, 0.0), minus=True))
+    t += DT
     runner.step(FrameInput(t=t, raw_cursor_px=(0.0, 0.0), digit=1))
     t += DT
-    runner.step(FrameInput(t=t, raw_cursor_px=(0.0, 0.0), digit=1))  # magnitude 11
-    t += DT
-    ready_t = t  # report becomes "ready" the instant the side is selected, this frame
-    runner.step(FrameInput(t=t, raw_cursor_px=(0.0, 0.0), side="CCW"))
+    ready_t = t  # last keystroke before SPACE
+    runner.step(FrameInput(t=t, raw_cursor_px=(0.0, 0.0), digit=1))
     t += DT
     runner.step(FrameInput(t=t, raw_cursor_px=(0.0, 0.0), space_pressed=True))
     t += DT
@@ -284,3 +284,53 @@ def test_report_trial_waits_for_valid_confirm():
     assert runner.result.reported_side == "CCW"
     # landmark -11 at target 0 deg -> target - (-11*5.625) = +61.875 deg
     assert runner.result.reported_angle_deg == pytest.approx(11 * CFG.landmarks.spacing_deg)
+    assert runner.result.report_wait_max_drift_mm == pytest.approx(0.0)
+
+
+def test_report_of_zero_needs_only_space():
+    spec = make_spec(trial_type="adaptation_report", rotation_deg=60.0, needs_report=True)
+    runner = TrialRunner(spec, CFG, GP)
+    t = hold_at_home(runner, 0.0)
+
+    runner.step(FrameInput(t=t, raw_cursor_px=(0.0, 0.0), digit=0))
+    t += DT
+    runner.step(FrameInput(t=t, raw_cursor_px=(0.0, 0.0), space_pressed=True))
+
+    assert runner.phase is TrialPhase.MOVING
+    assert runner.reported.magnitude == 0
+    assert runner.reported.side is None
+
+
+def test_drift_during_report_wait_is_reset_and_logged():
+    """The cursor is hidden while the report is entered; if the finger
+    drifts, SPACE puts the cursor back on home (to-decide.md #35) and the
+    drift is logged for QC, without contaminating the reach angles."""
+    spec = make_spec(trial_type="adaptation_report", rotation_deg=60.0, needs_report=True)
+    resets = []
+    runner = TrialRunner(spec, CFG, GP, reset_cursor=lambda: resets.append(True))
+    t = hold_at_home(runner, 0.0)
+
+    drifted = (0.0, 200.0)  # 2 cm straight down (px_per_cm = 100), well off home
+    runner.step(FrameInput(t=t, raw_cursor_px=drifted, digit=5))
+    t += DT
+    runner.step(FrameInput(t=t, raw_cursor_px=drifted, space_pressed=True))
+    t += DT
+
+    assert resets == [True]
+    assert runner.phase is TrialPhase.MOVING
+    assert runner.displayed_pos == runner.home_px  # no one-frame flash at the drifted spot
+    assert runner.movement_onset_timestamp is None  # still on home after the reset
+
+    # the orchestrator's tracker is now back on home, so the reach starts there
+    t = move_straight_to_target(runner, t, duration_s=0.5)
+    run_end_feedback_to_done(runner, t)
+    assert runner.result.report_wait_max_drift_mm == pytest.approx(20.0)
+    assert runner.result.movement_angle_at_50pct_reach == pytest.approx(0.0, abs=1.0)
+
+
+def test_non_report_trial_has_no_drift_value():
+    runner = TrialRunner(make_spec(), CFG, GP)
+    t = hold_at_home(runner, 0.0)
+    t = move_straight_to_target(runner, t, duration_s=0.5)
+    run_end_feedback_to_done(runner, t)
+    assert runner.result.report_wait_max_drift_mm is None

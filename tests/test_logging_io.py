@@ -44,6 +44,7 @@ def make_result(trial_index=0, end_reason="hit"):
         speed_feedback="good",
         movement_angle_at_50pct_reach=1.2,
         movement_angle_initial_segment=1.0,
+        report_wait_max_drift_mm=None,
     )
 
 
