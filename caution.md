@@ -74,6 +74,13 @@ that will not show up as an obvious bug, only as noisier/biased angle data.
   anywhere in the pipeline silently corrupts every explicit/implicit
   calculation without throwing an error — worth a dedicated sanity check
   before the first real subject (see to-decide.md #13).
+- **Aim reports**: the participant reads the ring label aloud, sign included
+  ("minus 10"); the experimenter types it exactly as heard (`-` `1` `0`)
+  and presses SPACE (to-decide.md #14). Tell participants to keep their
+  finger still until the beep: the cursor is hidden while the report is
+  entered, so they can't see themselves drifting. Drift is discarded at
+  the beep but logged; check the drift table in
+  `notebooks/check_session.py` after the session (to-decide.md #35).
 - Ambient noise: verbal number reports are hand-transcribed by the
   experimenter. A quiet room reduces mishearing (e.g. "13" vs "30", "15" vs
   "50"). Consider having the participant say numbers as two clearly separated

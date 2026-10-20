@@ -1,284 +1,322 @@
 # To-Decide / Open Parameters
 
-Status of every open question from the spec review. Items marked "engineer
-default" are my best call so the build isn't blocked — all are config values,
-trivial to change later. Revisit after the first pilot subject.
+Every design choice made while turning the task description into a
+program, written so that someone who has **not** read the code can follow
+it. For each item: what it is, what the program does right now, and what to
+watch for during pilot testing.
+
+Items keep their original numbers (#1–#35), because the code, `caution.md`
+and `README.md` refer to them by number. They are grouped by how much
+attention they still need:
+
+- **A. Open — needs a human decision**: nothing sensible can be chosen
+  without you.
+- **B. Provisional — confirm during piloting**: a reasonable default is in
+  place, but only a real pilot session can tell whether it's right.
+- **C. Settled — for the record**: decided (by the PI or engineering); listed
+  so the reasoning is not lost. Reopen any of them if piloting suggests so.
+
+"Where to change" points to the setting or file to edit if the decision
+changes. Most are in `config.yaml`, which needs no programming.
+
+### Words used throughout
+
+- **Home**: the small green circle in the screen centre where every reach
+  starts.
+- **Cursor**: the small white dot that represents the participant's finger on
+  the trackpad. The participant's hand is hidden under an occluder, so the
+  cursor is all they see of their own movement.
+- **Target**: the red circle, 7 cm from home, in one of four directions
+  (right, up, left, down).
+- **Rotation**: on rotated trials the cursor's movement is turned by a fixed
+  angle relative to the hand's real movement. With a 60° clockwise rotation,
+  moving the hand straight up makes the cursor go up-and-to-the-right, so the
+  participant must learn to aim 60° counter-clockwise of the target.
+- **Landmark ring**: numbers printed in a circle around home on "report"
+  trials. Before reaching, the participant says aloud which number they are
+  aiming at — this measures their *explicit* (conscious) aiming strategy.
+- **Experimenter**: the person at the keyboard. The participant never touches
+  the keyboard.
 
 ---
 
-## Decided by PI (2026-09-16 discussion)
+## A. Open — needs a human decision
 
-1. **Movement-onset** = cursor leaves the 14 px (2.5 mm) home radius.
-2. **Timeout clock** starts at the go signal (beep), for all trial types.
-3. **Number of adaptation cycles** = 1 for now, exposed as `n_adaptation_cycles`
-   in `config.yaml` for future changes.
-4. **Rotation sign**: 60° CW cursor rotation ⇒ participant must aim CCW to
-   compensate.
-5. **Pseudorandomization** = pure random (no extra constraints) for target
-   order and no-vision-trial placement, v1.
-6. **Report-training rotation range** = pure random uniform in [−30°, +30°],
-   resampled every trial.
-7. **Post-adaptation block order** = fixed for all subjects: return-to-baseline
-   (exclusion) → re-adaptation → inclusion ("use learned adjustment"). An
-   instruction screen precedes every sub-block that needs one (baseline
-   report-training, each adaptation-report probe, and all three
-   post-adaptation sub-blocks).
-8. **Cursor reset**: internal cursor snaps to home at the start of every
-   trial; participant is free to reposition their finger on the trackpad
-   between trials (this is what relative/delta input buys us).
-9. **Familiarization target count** = 4 (0/90/180/270°). The "八個點" text in
-   the spec is an error; the illustrated layout (4 targets) is correct.
-10. **Trackpad** = external Magic Trackpad 3 (already purchased).
-11. **Framework** = pygame (pygame-ce).
+27. **Two moments have no instruction text in the task description.**
+    Every other change of task comes with a written instruction screen, but
+    these two do not:
+    - the switch from baseline into the **adaptation** block (when the 60°
+      rotation first turns on), and
+    - the start of the **re-adaptation** part of the post-adaptation block
+      (when the rotation turns back on after the "don't use your
+      adjustment" trials).
 
----
+    Right now, the program shows **no** instruction screen at either point;
+    the rotation simply starts. No wording has been invented.
+    **Decide**: should participants get a written or spoken heads-up at
+    either moment, and if so, what exactly should it say?
+    Where to change: `vmr/display.py` (instruction texts) and
+    `vmr/schedule.py` (which trials get an instruction screen).
 
-## Decided by engineer — defaults, please sanity-check after pilot
+34. **Resuming an interrupted block can change the planned trial order.**
+    Each block's trial order (which target comes when, and where the special
+    trials fall) is shuffled using a random number called the *seed*. The
+    same seed always gives the same order. If a block is interrupted (e.g.
+    ESC pressed after 30 trials) and started again, the program correctly
+    skips the 30 trials already recorded — **but it makes a brand-new random
+    order unless the original seed is typed in again**. So "trial 31 onward"
+    may not be what was originally planned: a target or special trial could
+    be repeated or skipped compared with the plan.
+    **Current workaround**: when resuming, look up the seed in that block's
+    `schedule.csv` (column `seed`) and pass it with `--seed`.
+    **Decide**: should the program read back the original seed
+    automatically when resuming? (Recommended — it's a small change.)
 
-12. **Hit-zone radius** = cursor circle (r = 3 px / 0.5 mm) touching target
-    circle (r = 28 px / 5 mm) → `hit_radius = 31 px` (≈5.5 mm), i.e. standard
-    circle-overlap contact test. This matches the dashed "just outside the
-    solid target" ring shown in the familiarization slide.
-    **Revisit if**: pilot subjects find it too easy or too hard, or if the
-    dashed circle in the mockup was meant to represent a specific larger
-    catch radius rather than geometric circle-overlap.
+19. **Which MacBook will run the study (model and year)?** Only matters for
+    knowing whether the screen can refresh at 120 Hz (which allows finer
+    movement recording, see #17). Not needed for anything else: screen size
+    is detected automatically (#18).
 
-13. **Landmark ring** = 64 positions, 5.625° apart, full circle. Landmark "0"
-    at the target; +1…+31 clockwise, −1…−31 counterclockwise; ring rotates
-    rigidly with the target. Taken directly from Taylor, Krakauer & Ivry
-    (2014, *J Neurosci* 34(8):3023–3032) — the paper this task's
-    report/adaptation-report design is clearly modeled on. Using their exact
-    scheme makes results directly comparable to that literature.
-    **Revisit if**: you want a coarser/finer ring, or a different max
-    magnitude than ±31.
-
-14. **Experimenter report-entry UI**: type the spoken magnitude (0–31 digits,
-    live-echoed on the experimenter's screen), press ← or → (or L/R) for
-    side (skipped when magnitude is 0), SPACE confirms — SPACE both locks the
-    report and triggers the go signal, per spec.
-    **Revisit if**: this feels slow or error-prone during piloting; see
-    the comparison table in chat for alternatives considered.
-
-15. **Post-adaptation trial_type labels** (the spec's slides reused
-    mid-adaptation labels by copy-paste, which would make these
-    indistinguishable in the CSV):
-    - `post_exclusion` — was generically "return-to-baseline" in the
-      post-adaptation section
-    - `post_readaptation` — was mislabeled `adaptation_regular` in the spec
-    - `post_inclusion` — was mislabeled `adaptation_return_to_baseline` in
-      the spec (no-cursor / no-feedback behavior is unchanged, only the
-      trial_type string changes)
-    **Revisit if**: you'd rather these share a label with their mid-adaptation
-    counterparts and be distinguished only by a `phase` column instead.
-
-16. **`rotation_deg` semantics**: always means "rotation applied to the
-    *displayed* cursor this trial" — `null` whenever no cursor is shown
-    (no-vision / no-feedback trial types), even though a perturbation is
-    nominally "in force" in the background. The block-level perturbation
-    (0° baseline / 60° adaptation & re-adaptation / none during
-    inclusion & exclusion probes) is documented once in `config.yaml`, not
-    duplicated per row.
-    **Revisit if**: you want per-row redundancy for easier ad hoc filtering
-    without joining against the config — trivial to add a second column.
-
-17. **Sampling**: poll trackpad deltas once per rendered frame via pygame in
-    v1, rather than a raw Quartz/pyobjc event tap. Achieved Hz will be
-    measured empirically in the pilot's timing-audit notebook.
-    **Revisit if**: the measured rate (likely ~60–125 Hz) turns out too
-    coarse for the velocity-profile analyses you want — then we add the
-    event tap.
-
-18. **px↔cm conversion**: computed at runtime from the actual display's
-    physical panel size and current resolution, not hardcoded to the spec's
-    `px: 391` (which assumes one specific display/resolution). Makes the
-    code correct on whatever machine actually runs it.
-    **Revised 2026-09-18** (raised by PI: calibration shouldn't be a
-    mandatory manual step): `resolve_calibration()` now auto-detects the
-    physical size via macOS's own Quartz API (`CGDisplayScreenSize`),
-    which is accurate for a real, connected display — no setup required,
-    the experiment runs out of the box. A manually-measured calibration
-    (the ruler routine, `python -m vmr.display_calibration`) is saved to
-    `display_calibration.json` at the project root and, if present,
-    **always overrides** auto-detection — it exists only for the rare case
-    auto-detection is wrong (e.g. some external monitors report bad EDID
-    data) or Quartz is unavailable. Auto-detected values are never cached
-    to disk (detection is instant, and not caching means a monitor swap
-    is picked up immediately); whichever value was actually used is
-    recorded per-session in `data/<subject>/<block>/calibration_used.json`
-    for provenance.
-    **Revisit if**: you swap to an external monitor where auto-detection
-    turns out to be wrong — the symptom would be reaches feeling
-    mis-scaled relative to the intended 7cm distance. Run the manual
-    calibration once to override it.
+20. **Should the trial order have extra rules?** At the moment the order is
+    purely random (#5). Common extra rules in the literature: never the same
+    target more than twice in a row; no "no-cursor" trial among the first
+    or last few baseline trials. None are applied.
+    **Decide** after piloting whether any of these are wanted.
 
 ---
 
-## Decided by engineer — schema cleanup (delegated 2026-09-16)
+## B. Provisional — confirm during piloting
 
-21. **Collapse `hit_target` / `boundary_crossed` / `timeout` into one
-    `end_reason` field** (`hit` / `boundary` / `timeout`). They're mutually
-    exclusive by construction; one enum can't be logged inconsistently the
-    way three independent booleans can.
-22. **Keep `target_x`/`target_y`** even though they're derivable from
-    `target_angle_deg` + the workspace radius — logging the actual px
-    protects old sessions' data from silent reinterpretation if the radius
-    config ever changes.
-23. **Add a `phase` column** (`familiarization` / `baseline` / `adaptation` /
-    `post_adaptation`), separate from `trial_type`, so analysis can group by
-    phase without string-parsing trial_type values.
-24. **Rename** `adaptation_block` → `cycle_index`, `probe_number` →
-    `probe_index` — both 0-based, consistent with `trial_index`.
-25. **Add a secondary derived angle**: alongside
-    `movement_angle_at_50pct_reach`, also log heading angle from the initial
-    trajectory segment (1–3 cm from home), which is what Taylor et al. (2014)
-    use for their primary heading-angle measure. Costs nothing to compute and
-    gives a literature-standard fallback if the 50%-reach measure turns out
-    noisier than expected.
+12. **How close the cursor must get to "hit" the target.**
+    The trial counts as a hit as soon as the cursor dot (0.5 mm radius)
+    touches the target circle (5 mm radius), i.e. when the centres are within
+    5.5 mm. This matches the dashed ring just outside the target in the task
+    illustration.
+    **Watch for**: hit rates that are much too high or too low, or whether
+    that dashed ring was meant as a deliberately *larger* catch zone.
+    Where to change: `config.yaml` → `workspace: hit_radius_mm`.
 
-26. **Instruction-screen timing** (implemented in `vmr/schedule.py`): three
-    scopes, inferred from the spec's own wording rather than applied
-    uniformly:
-    - `once_per_phase` — familiarization and baseline (all three baseline
-      trial types share one combined instruction, per the spec's single
-      "Baseline-section start" text covering veridical/no-vision/report
-      scenarios together); shown only before the very first trial.
-    - `once_per_trial` — `adaptation_report` and
-      `adaptation_return_to_baseline`. These are scattered individually
-      among ordinary adaptation trials (pure-random interleaving), and the
-      spec explicitly says "Presented before each Return-to-baseline probe
-      block" — read literally, that's every occurrence, not once per cycle.
-    - `once_per_block` — the post-adaptation exclusion and inclusion
-      sub-blocks (each a contiguous 16-trial run per to-decide.md #7),
-      shown once at the start of each. Re-adaptation gets none — see #27.
-    **Revisit if**: the once-per-trial reminders for report/return-to-baseline
-    probes feel repetitive in piloting — could be softened to "only if the
-    previous trial was a different type," though that's what once_per_trial
-    already reduces to when these probes are sparse among 40 regular trials.
+13. **Layout and numbering of the landmark ring.**
+    64 numbered positions evenly spaced around the full circle (one every
+    5.625°). The number **0** sits on the target. Numbers increase going
+    **clockwise** (+1 … +31) and go negative going **counter-clockwise**
+    (−1 … −31). The ring turns with the target, so 0 is always on whichever
+    target is shown. Copied exactly from Taylor, Krakauer & Ivry (2014,
+    *J Neurosci* 34(8):3023–3032), the study this task is based on, so
+    results are directly comparable.
+    **Watch for**: if the spacing is too fine or coarse to read, or the
+    sign convention is confusing to participants. Before the first real
+    participant, check once by hand that "aim at −10" really means
+    counter-clockwise — a sign flip would silently corrupt every
+    explicit-aim measure (see `caution.md`).
+    Where to change: `config.yaml` → `landmarks`.
 
-28. **`movement_time_ms` window**: measured from `movement_onset_timestamp`
-    to the end-of-movement timestamp (hit/boundary/timeout), not from
-    `go_signal_timestamp`. This is what feeds the 400–600 ms speed-feedback
-    band, so it excludes reaction time (the delay before the hand starts
-    moving) and counts only the reach itself — standard motor-control
-    convention, and the only reading consistent with "movement time" as a
-    name distinct from "reaction time."
-    **Revisit if**: you actually want the band to include reaction time
-    (i.e. measured from the beep) — a one-line change in
-    `vmr/trial.py::_end_trial`.
+14. **How the experimenter types the participant's spoken number.**
+    The experimenter types the number **exactly as heard**, sign included,
+    then presses SPACE:
+    - "10" → `1` `0` SPACE
+    - "minus 10" → `-` `1` `0` SPACE
+    - "0" → `0` SPACE
 
-29. **Home-hold dwell**: the 500 ms hold must be *continuous* — if the
-    cursor leaves the home radius before 500 ms accumulates, the dwell
-    timer resets to zero rather than pausing/resuming. Standard convention
-    for center-out reaching tasks; not stated explicitly in the spec.
+    Top-row keys and the numeric keypad both work (including the keypad
+    `-`). The number appears in the bottom-left corner in the same format
+    as the ring (`回報: -10`), so the participant can catch a misheard
+    number. BACKSPACE deletes the last character. A number above 31 cannot
+    be confirmed: SPACE silently does nothing.
+    SPACE both records the report and sounds the "go" beep, so the
+    participant can't start before the report is entered. Until SPACE, no
+    cursor is shown (see #35).
+    In `trials.csv` the report is stored as `reported_number` (without sign)
+    plus `reported_side` (`CCW` for negative, `CW` for positive, empty for
+    0), and `reported_angle_deg` (the direction it points to).
+    `report_registered_timestamp` is the time of the last keystroke before
+    SPACE, i.e. when transcription finished.
+    *Changed 2026-10-20*: replaced the earlier "type the size, then press ←
+    or → for the side" entry, which made the experimenter convert "minus"
+    into a screen direction (hard when the target is at the bottom).
+    **Watch for**: whether mistakes happen, e.g. mishearing "13" vs "30",
+    or a forgotten `-`.
 
-30. **Instruction-text font**: pygame's bundled default font has no CJK
-    glyphs — it silently renders Chinese text as tiny "tofu" boxes rather
-    than erroring, which would have gone unnoticed without pixel-level
-    testing. `vmr/display.py` now picks a real CJK-capable system font
-    (`stheitimedium`, confirmed present and rendering correctly on this
-    Mac) with a fallback list, rather than trusting `SysFont(None, ...)`.
-    **Revisit if**: the target Mac doesn't have any of the candidate fonts
-    installed — check `pygame.font.get_fonts()` on that machine and add
-    whichever CJK font it does have to `_CJK_FONT_CANDIDATES`.
+17. **How often the finger position is recorded.**
+    The position is read once per screen refresh (about 60 times per
+    second on a standard screen). This is the simplest reliable method. A
+    faster, more complicated method (reading the trackpad directly at the
+    operating-system level) is possible if needed.
+    **Watch for**: after the pilot, check the achieved rate in
+    `notebooks/calibration.py`. If ~60 samples/s is too coarse for the
+    planned analyses (e.g. velocity profiles), switch to the faster method.
 
-31. **Which physical display shows the experiment, on a multi-monitor
-    setup**: pygame's own default (`display=0`) is **not** reliably the
-    display macOS calls "Main" — confirmed by live testing: with an
-    external monitor explicitly set as Main Display in System Settings,
-    `display=0` still opened on the built-in MacBook panel. SDL's display
-    enumeration order follows OS connection/detection order, not the Main
-    Display setting; Apple's own docs for the underlying enumeration API
-    note the first entry "is not necessarily the main display." This also
-    meant calibration (`CGMainDisplayID`) and window placement could
-    silently disagree about which screen was meant.
-    `vmr/orchestration.py::resolve_display_index` now matches pygame
-    display indices against Quartz's `CGMainDisplayID` **by resolution**
-    (tolerant of a 2x HiDPI points-vs-pixels mismatch between the two
-    APIs), so display selection and calibration are structurally tied to
-    the same "Main Display" concept and can't disagree. With only one
-    display connected there's nothing to disambiguate, so it returns 0
-    immediately — the "no external monitor → falls back to the built-in
-    screen" behavior is automatic. Falls back to 0 with a `warnings.warn`
-    if detection fails or two displays share an identical resolution
-    (rare for laptop+external, but not impossible).
-    **To use it**: set the desired display as Main Display in System
-    Settings → Displays → Arrangement (drag the menu-bar strip onto it)
-    before launching. Verified against this dev machine's real displays
-    (not mocked): correctly resolved to the display matching
-    `CGMainDisplayID`'s actual resolution.
-    **Revisit if**: you get two displays with truly identical native
-    resolutions (e.g. two of the exact same external monitor model) — the
-    resolution-matching heuristic can't disambiguate that case and will
-    fall back to display 0 with a warning.
+18. **Converting centimetres to screen pixels.**
+    All distances are set in real-world units (target 7 cm from home, etc.).
+    The program converts them to pixels using the screen's real physical
+    size, which macOS reports automatically each time a block starts, so it
+    works on any monitor without setup. The task description's fixed
+    "391 px" only fit one particular screen.
+    If a monitor reports its size wrongly (some external monitors do), the
+    reaches will feel too long or too short. In that case, measure the
+    screen once with a ruler (`poetry run python -m vmr.display_calibration`);
+    the measured value then always overrides the automatic one until its
+    file (`display_calibration.json`) is deleted. The value actually used is
+    saved with every session's data (`calibration_used.json`).
+    **Watch for**: on a new external monitor, check that file's `px_per_cm`
+    is plausible (24–27" monitor ≈ 35–45 px/cm).
 
-32. **Duplicate subject-ID protection**: `(subject_id, block_name)` is the
-    *entire* identity key for where data is saved — there is no
-    participant-identity check, so accidentally reusing an ID (e.g. weeks
-    later, for a different real person) would previously either silently
-    do nothing (if the prior block was fully complete — `trials_to_run`
-    would be empty) or, worse, silently merge a second person's trials
-    into the same file as a partially-completed prior session, with
-    logging appending in both cases (never overwriting — that part was
-    already safe). Both the interactive menu (after the subject-ID text
-    is confirmed) and the CLI `--subject`/`--block` path now check
-    `vmr/menu.py::check_existing_data` and require an explicit choice
-    before proceeding if that subject/block already has trials logged:
-    the menu shows a Resume/different-ID/Cancel screen
-    (`draw_duplicate_warning`, `wait_for_duplicate_choice`); the CLI
-    prints the same information and asks via `input()`, with a `--yes`
-    flag to skip the prompt for scripted/known-good resumes.
-    **What this does not fix**: a genuinely intentional resume after a
-    real interruption still uses a fresh random schedule unless the
-    original `--seed` is passed explicitly — see #34; auto-recovering the
-    seed from the existing `schedule.csv` on resume would be the complete
-    fix and hasn't been implemented.
-    **Revisit if**: this prompt feels like it fires too often for a
-    workflow that deliberately reruns a block under the same ID.
+26. **When instruction screens appear.**
+    The task description's wording implies three different patterns:
+    - **Once at the start of the block**: familiarization, and baseline.
+      Baseline has a single combined instruction covering all its trial
+      kinds (normal, no-cursor, and report trials).
+    - **Before every single occurrence**: the "say your aim first" reminder
+      before each report trial in adaptation, and the "don't use your
+      adjustment" reminder before each no-cursor test trial in adaptation.
+      These trials are scattered among normal trials, and the description
+      says "presented before each … probe".
+    - **Once at the start of each sub-block**: the "don't use your
+      adjustment" and "use your adjustment" parts of the post-adaptation
+      block (16 trials each).
 
-33. **Subject-ID whitespace/case normalization**: leading/trailing
-    whitespace is stripped before a subject ID is ever used to build a
-    path or checked against existing data (`vmr/menu.py::normalize_subject_id`,
-    applied on both the menu and CLI paths) — a stray space from a
-    copy-paste or an errant space-bar tap can't be a legitimate part of
-    an ID, and without stripping it would also let a whitespace-variant
-    ID slip past the duplicate-ID check in #32 entirely (this normalization
-    is load-bearing for #32, not merely cosmetic). A whitespace-only entry
-    is also no longer accepted as a valid subject ID at all
-    (`handle_text_entry_key` requires non-whitespace content to confirm).
-    **Case is deliberately NOT normalized** — `S01` and `s01` are treated
-    as different subjects, per PI decision (2026-09-18), not an oversight.
+    Every instruction screen stays up until the experimenter presses SPACE.
+    **Watch for**: if the per-trial reminders feel repetitive. With only 4
+    of each among 40 normal trials they should rarely appear back to back.
+    Where to change: `vmr/schedule.py`.
 
-## Still open — informational only, not blocking v1 code
+28. **What "movement time" measures.**
+    Movement time is from when the finger **leaves home** to when the cursor
+    reaches the target — *not* from the beep. It drives the speed feedback
+    (target turns green if 400–600 ms, yellow if faster, blue if slower).
+    So the time taken to react to the beep doesn't count against the
+    participant, only the reach itself. This is the usual meaning of
+    "movement time" in motor-control research.
+    **Watch for**: if the intention was to include reaction time (i.e.
+    timed from the beep), this is a one-line change in `vmr/trial.py`.
 
-19. Exact MacBook model/year — useful to know whether ProMotion (120 Hz) is
-    available, but not required given #18 above computes geometry at
-    runtime regardless of model.
-20. Whether to add trial-order constraints later (no >2 consecutive repeats
-    of a target, no-vision trials excluded from first/last N of baseline,
-    etc.) — deferred per "pure random for now" (#5).
-34. **Resume doesn't recover the original seed.** `build_schedule()` draws
-    a fresh random seed every launch unless `--seed` is passed explicitly;
-    resuming a partially-completed block (`n_existing > 0` trials already
-    logged) doesn't read back the seed that was actually used the first
-    time from `schedule.csv`/`trials.csv`'s `seed` column — it just slices
-    "the first N trials" off of whatever schedule the current call
-    happens to generate. If that's a different seed than the original run,
-    "trial N onward" isn't the trial sequence that was actually planned.
-    Raised alongside #32 but not fixed: the natural fix is to have resume
-    look up and reuse the recorded seed automatically (warning if the
-    caller passed a conflicting one), at the same point `check_existing_data`
-    already reads the prior session's files.
-27. **Spec gap**: two transitions have no quoted instruction text, unlike
-    every other section boundary:
-    - entering the adaptation phase itself (only `adaptation_report` and
-      `adaptation_return_to_baseline` have explicit instruction text;
-      plain `adaptation_regular` trials — and the transition into the
-      rotated phase generally — have none)
-    - entering the post-adaptation **re-adaptation** sub-block (exclusion
-      and inclusion each have quoted Chinese instructions; re-adaptation's
-      spec pages show the same plain rotated-trial mechanics as
-      `adaptation_regular`, with no text box)
-    Not inventing wording for either; `vmr/schedule.py` currently shows no
-    instruction screen for `post_readaptation` and none for entering
-    adaptation. Flagging so you can decide whether participants need a
-    verbal heads-up before either transition.
+35. **Finger drift while the aim report is entered.**
+    While the experimenter is entering the report, the cursor is hidden
+    (on rotated trials a visible cursor would reveal the rotation before
+    the reach), so the participant can't see if their finger slides off
+    home. Previously, the reach then started from wherever the hidden
+    cursor had drifted to, which corrupts reaction time, movement time and
+    reach direction, and could even end the trial instantly.
+    *Fixed 2026-10-20*: when SPACE is pressed, the cursor is put back on
+    home, so the reach always starts there. Input is relative, so where
+    the finger physically sits on the trackpad doesn't matter. The largest
+    drift during the report is saved per trial as
+    `report_wait_max_drift_mm` (empty on non-report trials), and
+    `notebooks/check_session.py` lists report trials that drifted more than
+    the home radius (2.5 mm), which may mean the participant started moving
+    early. Reach-direction measures use only movement after the beep.
+    Note that `samples.csv` still contains the drifted positions recorded
+    during the report, followed by a jump back to home at the beep.
+    **Watch for**: how often drift happens in piloting. If often, consider
+    a stronger "keep still until the beep" instruction, or excluding
+    trials above some drift threshold.
+
+29. **Holding still on home before each trial.**
+    The participant must keep the cursor on home for 500 ms *without
+    interruption* before the target appears. If the cursor slips off home
+    during that time, the 500 ms count starts over (rather than pausing and
+    continuing). Usual convention; not stated in the task description.
+
+---
+
+## C. Settled — for the record
+
+### Decided by the PI (2026-09-16 discussion)
+
+1. **When "movement onset" happens**: the moment the cursor leaves home
+   (moves more than 2.5 mm from the centre).
+2. **When the 2-second time limit starts**: at the "go" beep, for every
+   trial type. If the target isn't reached within 2 s, the trial ends as a
+   miss.
+3. **Number of adaptation cycles**: 1. A cycle = 48 rotated trials (40
+   normal, 4 report, 4 no-cursor tests). Can be raised later in
+   `config.yaml` → `trial_counts: adaptation: n_cycles`.
+4. **Direction of the rotation**: the cursor is turned 60° **clockwise**, so
+   the participant must aim counter-clockwise to compensate.
+5. **Randomising the trial order**: plain random, no extra rules, for both
+   which target appears and where the no-cursor trials fall. (Each target
+   still appears about equally often within each kind of trial.)
+6. **Rotation on baseline report-practice trials**: each of these 40
+   trials gets its own random rotation between 30° counter-clockwise and
+   30° clockwise, so participants practise reporting an aim that differs
+   from the target, without learning any one consistent rotation.
+7. **Order inside the post-adaptation block**: the same for everyone —
+   (1) "don't use your adjustment" no-cursor trials → (2) re-adaptation
+   with the rotation back on → (3) "use your adjustment" no-cursor trials.
+8. **Cursor reset between trials**: the cursor jumps back to home at the
+   start of every trial, so the participant can lift and reposition their
+   finger anywhere on the trackpad between trials. Any finger movement
+   during the pause or an instruction screen is discarded, so every trial
+   starts exactly on home (fixed 2026-10-20: before, that movement was
+   applied all at once on the trial's first frame, pushing the cursor off
+   home). The same reset happens again at the beep on report trials (#35).
+9. **Familiarization targets**: the 4 standard directions. ("八個點" in the
+   description was a typo; the illustration shows 4.)
+10. **Trackpad**: external Apple Magic Trackpad 3.
+11. **Software**: Python with pygame (pygame-ce).
+
+### Data-file format (decided by engineering, 2026-09-16)
+
+These affect only how results are written to `trials.csv`, not what the
+participant experiences.
+
+15. **Names for the post-adaptation trial kinds.** The task description
+    reused labels from the adaptation block for these, which would make
+    them impossible to tell apart in the data. They are now labelled:
+    `post_exclusion` ("don't use your adjustment"), `post_readaptation`
+    (rotation back on), and `post_inclusion` ("use your adjustment").
+16. **What the "rotation" column records.** It holds the rotation applied
+    to the *visible* cursor on that trial. On trials with no visible cursor
+    it is left empty, even inside the adaptation block, because nothing was
+    rotated on screen. The block-level rotation (0° baseline, 60°
+    adaptation) is recorded once in the saved `config_snapshot.yaml`.
+21. **One "how did the trial end" column** (`end_reason`: `hit`, `boundary`
+    = went past 7 cm without hitting, or `timeout` = 2 s ran out) instead of
+    three yes/no columns that could contradict each other.
+22. **Target position is stored in pixels as well as its direction**, so old
+    data stays interpretable even if distances are changed later.
+23. **A `phase` column** (familiarization / baseline / adaptation /
+    post_adaptation) for easy grouping in analysis.
+24. **Counting columns renamed and start at 0**: `cycle_index` (which
+    adaptation cycle) and `probe_index` (which report / no-cursor test
+    trial within a cycle), matching `trial_index`.
+25. **Two measures of reach direction are saved.** (a) The direction of the
+    hand at the point halfway to the target (the description's measure),
+    and (b) the direction of the early part of the movement, 1–3 cm from
+    home — the measure Taylor et al. (2014) use. (b) is a backup in case (a)
+    turns out noisy.
+
+### Practical safeguards (decided by engineering)
+
+30. **Chinese instruction text.** pygame's built-in font has no Chinese
+    characters and silently draws empty boxes instead. The program now
+    picks a Chinese-capable font installed on the Mac (e.g. STHeiti,
+    PingFang). **If the instructions show boxes on a new Mac**, that Mac
+    lacks all the listed fonts; add one it has to `_CJK_FONT_CANDIDATES` in
+    `vmr/display.py`.
+
+31. **Which screen the experiment opens on, with two monitors.** It opens
+    full-screen on whichever display macOS calls the **Main Display** (the
+    one with the menu bar) — set in System Settings → Displays → Arrangement
+    by dragging the white menu-bar strip onto the desired screen. This is
+    *not* necessarily the laptop screen and *not* necessarily the bigger
+    one. With one screen there's nothing to set. Known limitation: with two
+    monitors of identical resolution, the program can't tell them apart,
+    falls back to the first one, and prints a warning.
+
+32. **Protection against reusing a participant ID by mistake.** Data are
+    saved in a folder named after the participant ID and block. Before this
+    safeguard, typing an ID that had been used before (e.g. "S01" for a new
+    person weeks later) would silently add the new person's trials to the
+    old person's file, or silently do nothing if that block was already
+    complete. Now, if that ID + block already has data, the program stops
+    and asks: **R** = resume this same participant, **N** = type a different
+    ID, **ESC** = cancel. When started from the command line it asks
+    `Resume this subject? [y/N]` (skippable with `--yes`).
+    This does not fix the resume-order problem in #34.
+
+33. **Tidying typed participant IDs.** Accidental spaces before or after an
+    ID are removed, so "S01 " can't slip past the check in #32 as a
+    "different" participant. An ID made only of spaces is refused.
+    Upper/lower case is **kept on purpose** (PI decision, 2026-09-18):
+    `S01` and `s01` are different participants.
