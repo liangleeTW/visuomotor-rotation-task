@@ -74,6 +74,19 @@ that will not show up as an obvious bug, only as noisier/biased angle data.
   anywhere in the pipeline silently corrupts every explicit/implicit
   calculation without throwing an error — worth a dedicated sanity check
   before the first real subject (see to-decide.md #13).
+- **Hold still until the beep**: before each trial the cursor must stay
+  inside the green home circle for 500 ms. If the participant moves, the
+  trial silently waits (there is no on-screen warning, to-decide.md #37)
+  and can look frozen. Tell participants during familiarization: after
+  each trial, lift the finger, put it back at the starting spot, and rest
+  it still until the beep. If a trial seems stuck, check whether the
+  white cursor is outside home and remind them verbally.
+- **Starting spot on the trackpad**: the cursor always starts on home no
+  matter where the finger is, so a finger resting near the trackpad's
+  edge can run out of surface before completing the 7 cm reach. Mark a
+  starting spot near the middle of the trackpad, and check in the pilot
+  that full reaches up, down, left and right all fit (up/down is the
+  tighter direction on the Magic Trackpad).
 - **Aim reports**: the participant reads the ring label aloud, sign included
   ("minus 10"); the experimenter types it exactly as heard (`-` `1` `0`)
   and presses SPACE (to-decide.md #14). Tell participants to keep their

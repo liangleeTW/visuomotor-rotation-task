@@ -72,6 +72,13 @@ def _cjk_font(size: int) -> pygame.font.Font:
     return pygame.font.SysFont(None, size)
 
 
+# The spec gives the cursor as "0.5 mm / 3 px" (3 px on its 391 px / 7 cm
+# display). On lower-density screens 0.5 mm rounds down to a near-invisible
+# 1 px dot, so the cursor is never *drawn* smaller than the spec's 3 px.
+# Drawing only — hit detection still uses the configured 0.5 mm.
+_MIN_CURSOR_DRAW_RADIUS_PX = 3
+
+
 def _ipos(pos: Point) -> tuple[int, int]:
     return (int(round(pos[0])), int(round(pos[1])))
 
@@ -94,7 +101,8 @@ class Renderer:
         pygame.draw.circle(self.screen, self.colors.home, pos, max(1, int(self.params.home_radius_px)))
 
     def draw_cursor(self, pos: Point) -> None:
-        pygame.draw.circle(self.screen, self.colors.cursor, _ipos(pos), max(1, int(self.params.cursor_radius_px)))
+        radius = max(_MIN_CURSOR_DRAW_RADIUS_PX, round(self.params.cursor_radius_px))
+        pygame.draw.circle(self.screen, self.colors.cursor, _ipos(pos), radius)
 
     def draw_target(self, pos: Point, color: tuple[int, int, int]) -> None:
         pygame.draw.circle(self.screen, color, _ipos(pos), max(1, int(self.params.target_radius_px)))

@@ -5,7 +5,7 @@ program, written so that someone who has **not** read the code can follow
 it. For each item: what it is, what the program does right now, and what to
 watch for during pilot testing.
 
-Items keep their original numbers (#1–#35), because the code, `caution.md`
+Items keep their original numbers (#1–#37), because the code, `caution.md`
 and `README.md` refer to them by number. They are grouped by how much
 attention they still need:
 
@@ -71,6 +71,41 @@ changes. Most are in `config.yaml`, which needs no programming.
     `schedule.csv` (column `seed`) and pass it with `--seed`.
     **Decide**: should the program read back the original seed
     automatically when resuming? (Recommended — it's a small change.)
+
+36. **What the screen shows during the 2-second pause between trials.**
+    The spec only gives the pause length (`inter_trial_interval_ms: 2000`),
+    not what is on screen. Many psychology experiments show a small light
+    grey fixation cross in the centre during this time: it keeps the
+    participant's gaze where home will appear and makes "between trials"
+    visibly different from "trial running". Many reaching studies
+    (including Taylor et al., 2014) use a blank screen instead, so the
+    cross is not needed for comparability, and it would be a deviation
+    from the spec.
+    Currently the screen is not redrawn during the pause: after a miss it
+    is black, but after a hit the coloured target stays visible for the
+    whole 2 s (a bug, to be fixed whichever option is chosen).
+    **Decide**: blank black screen, or a light grey fixation cross?
+
+37. **On-screen warning when the finger moves before the beep.**
+    Before each trial the cursor must stay inside home for 500 ms; if it
+    leaves, the count restarts and the trial waits, with no message, so a
+    fidgeting participant can look like a frozen program. The spec has no
+    warning for this. Current approach: no on-screen warning; the
+    experimenter tells participants to rest their finger still on the
+    trackpad until the beep and reminds them verbally if needed (see
+    `caution.md`). The cursor is drawn at least 3 px so a participant who
+    did move can see it and steer back into home.
+    Possible additions if piloting shows it's needed:
+    - a short grey message under home while the finger moves, e.g.
+      「請保持手指不動，等待「嗶」聲」 (wording for the PI to approve);
+    - freezing the cursor on home during the wait while still requiring
+      500 ms of stillness, so the cursor can never be lost (e.g. moved off
+      the screen) — the trial then simply continues 500 ms after the
+      finger stops.
+    **Related**: the beep always comes exactly 500 ms after the hold
+    starts, so participants could learn to anticipate it. A random wait
+    (e.g. 500–1000 ms) would prevent that but differs from the spec's fixed
+    500 ms. **Decide** after piloting.
 
 19. **Which MacBook will run the study (model and year)?** Only matters for
     knowing whether the screen can refresh at 120 Hz (which allows finer
