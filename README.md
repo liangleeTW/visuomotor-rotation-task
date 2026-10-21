@@ -99,14 +99,21 @@ poetry --version       # should print Poetry (version 2.x.x)
 
 ### Step 4: Get the experiment folder
 
-Either:
-- **Copy the folder** you received (USB stick, shared drive, zip file) to a
-  permanent place, for example your Documents folder. Unzip it if needed.
-- **Or download it with git**, if you were given a repository link:
+The experiment lives at
+<https://github.com/liangleeTW/visuomotor-rotation-task>. Either:
+- **Download it with git (recommended)**, which makes later updates a
+  single command:
   ```bash
   cd ~/Documents
-  git clone <repository link> visuomotor-rotation-task
+  git clone https://github.com/liangleeTW/visuomotor-rotation-task.git
   ```
+  This creates `Documents/visuomotor-rotation-task`. To update to the
+  newest version later, go into the folder (step 5) and run `git pull`.
+  Your `data` folder is not touched by updates.
+- **Or download a zip**: on the GitHub page, click the green **Code**
+  button → **Download ZIP**, unzip it, and move the folder somewhere
+  permanent such as Documents. (Updating then means downloading again
+  and copying your `data` folder across, see [Data layout](#data-layout).)
 
 ### Step 5: Go into the folder
 
