@@ -31,13 +31,148 @@ They are listed with how to verify them in `caution.md`.
 
 ## Software setup
 
-Requirements: Python 3.12 and [Poetry](https://python-poetry.org/).
+This is done **once per computer** and takes about 20–30 minutes, mostly
+waiting for downloads. No programming knowledge is needed: you copy each
+command into the Terminal, press Enter, and wait for it to finish.
+
+### Terminal basics
+
+- **Open the Terminal**: press ⌘ Cmd + Space, type `Terminal`, press Enter.
+  A window with a text prompt opens.
+- **Run a command**: copy one line from a grey box below, paste it into the
+  Terminal (⌘ Cmd + V), press Enter. Wait until the prompt (a line ending
+  in `%`) appears again before running the next one.
+- Lines starting with `#` in the boxes are explanations, not commands. You
+  can paste them too; the Terminal ignores them.
+- When a command asks for a **password**, type your Mac login password.
+  Nothing appears on screen while you type; that's normal. Press Enter.
+- To stop a command that's running, press Ctrl + C.
+
+### Step 1: Apple's developer tools
 
 ```bash
-git clone <this repo> && cd visuomotor-rotation-task
-poetry install                 # installs pygame-ce, pandas, etc. and the vmr package
-poetry run pytest -q           # sanity check: all tests should pass, no screen needed
+xcode-select --install
 ```
+
+A window pops up: click **Install** and accept the licence. If it says the
+tools are already installed, continue to step 2.
+
+### Step 2: Homebrew (installs the other tools)
+
+[Homebrew](https://brew.sh) is the standard way to install software like
+Python on a Mac. Paste this exact line (it's also on brew.sh):
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+It asks for your password and to press Enter to continue. **When it
+finishes, it prints "Next steps" with two or three commands to run**
+(starting with `echo` and `eval`). Copy and run those too; without them,
+the Terminal won't find `brew`. Then close the Terminal window and open a
+new one.
+
+Check it worked:
+
+```bash
+brew --version
+```
+
+This should print a version number such as `Homebrew 4.x.x`.
+
+### Step 3: Python 3.12 and Poetry
+
+The experiment needs exactly **Python 3.12**. Poetry is the tool that
+installs the experiment's own Python packages (pygame and others) in a
+separate environment.
+
+```bash
+brew install python@3.12 poetry
+```
+
+Check both:
+
+```bash
+python3.12 --version   # should print Python 3.12.x
+poetry --version       # should print Poetry (version 2.x.x)
+```
+
+### Step 4: Get the experiment folder
+
+Either:
+- **Copy the folder** you received (USB stick, shared drive, zip file) to a
+  permanent place, for example your Documents folder. Unzip it if needed.
+- **Or download it with git**, if you were given a repository link:
+  ```bash
+  cd ~/Documents
+  git clone <repository link> visuomotor-rotation-task
+  ```
+
+### Step 5: Go into the folder
+
+Every command from here on must be run **inside the experiment folder**.
+Type `cd` followed by a space, then **drag the folder from Finder into the
+Terminal window** (this fills in its location), and press Enter:
+
+```bash
+cd /Users/yourname/Documents/visuomotor-rotation-task   # example; yours will differ
+```
+
+Check you're in the right place:
+
+```bash
+ls
+```
+
+You should see `README.md`, `run_block.py`, `config.yaml` and others.
+
+### Step 6: Install the experiment's packages
+
+```bash
+poetry env use python3.12
+poetry install
+```
+
+The second command downloads everything the experiment needs and ends with
+a line like `Installing the current project: vmr-task`.
+
+### Step 7: Check everything works
+
+```bash
+poetry run pytest -q
+```
+
+Success looks like `172 passed` (the number may differ) with **no**
+`failed` or `error`. This needs no screen or sound and takes a few seconds.
+Then do a short test run in a window:
+
+```bash
+poetry run python run_block.py --subject TEST --block familiarization --windowed
+```
+
+Press ESC to quit. Afterwards, delete the test data so it isn't mixed up
+with real participants: in Finder, open the experiment folder → `data` and
+move the `TEST` folder to the Bin.
+
+### Every session afterwards
+
+Only these steps are needed after setup:
+
+1. Open the Terminal.
+2. Go into the folder (step 5: `cd`, space, drag the folder in, Enter).
+3. Run `poetry run python run_block.py` (see [Running a session](#running-a-session)).
+
+### Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `zsh: command not found: brew` | The "Next steps" commands from step 2 weren't run. Run `echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile`, then open a new Terminal window. (On older Intel Macs, use `/usr/local/bin/brew` instead of `/opt/homebrew/bin/brew`.) |
+| `command not found: poetry` or `python3.12` | Step 3 didn't finish, or the Terminal window was opened before it did. Open a new window and run step 3 again. |
+| `Poetry could not find a pyproject.toml file` | You're not inside the experiment folder. Do step 5 again. |
+| `The currently activated Python version … is not supported` | Run `poetry env use python3.12`, then `poetry install` again. |
+| Typed letters don't appear on the start screen | The keyboard input source is set to a Chinese input method. Switch to **ABC** (or U.S.) in the menu bar before launching. |
+| Chinese instruction text shows as empty boxes | See `to-decide.md` #30. |
+| Anything else | Copy the whole Terminal output and send it to the engineer who set up the experiment. |
 
 The sound files (`go_beep.wav`, `hit_bell.wav`, `miss_buzz.wav`) are already
 in `assets/audio/`. If one is missing, the program warns and plays silence
@@ -199,7 +334,9 @@ The "trial kind" names are the values in the `trial_type` column of
 
 ## Running a session
 
-Go through the checklist at the end of `caution.md` first.
+Go through the checklist at the end of `caution.md` first. Then open the
+Terminal, go into the experiment folder (`cd`, see [step 5](#step-5-go-into-the-folder)),
+and run one of these:
 
 ```bash
 poetry run python run_block.py                                       # start screen: pick block + type ID
@@ -242,7 +379,10 @@ data/<subject_id>/<block_name>/
   calibration_used.json   the px/cm value used, and whether auto-detected or measured
 ```
 
-`data/` is not tracked by git. **Back it up after every session.**
+`data/` is not tracked by git. **Back it up after every session.** When
+updating the experiment to a newer version (a new copy of the folder),
+copy the `data` folder across first. Replacing the folder without it
+loses all collected data.
 
 ## Development
 

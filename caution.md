@@ -144,6 +144,8 @@ the first pilot subject.
 - [ ] Display brightness fixed, True Tone & Night Shift off
 - [ ] Power adapter connected
 - [ ] External monitor (if used) set as Main Display before launching
+- [ ] Keyboard input source set to ABC / U.S. (not a Chinese input method),
+      so typed participant IDs and aim reports reach the experiment
 - [ ] Subject ID / filename entered and confirmed on disk; if a duplicate
       warning appears, actually stop and check before choosing Resume
 - [ ] Familiarization block run and reviewed before the main session
